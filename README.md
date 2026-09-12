@@ -1,199 +1,223 @@
-# InboxClean - MVP SaaS Application
+# InboxClean
 
-A privacy-first Gmail inbox cleanup and newsletter management tool. Bulk unsubscribe from newsletters and clean up promotional emails in seconds.
+A Gmail inbox cleanup and newsletter-management tool. Group promotional mail by
+sender, unsubscribe through the endpoints senders publish, and clear the backlog
+with archive or trash — both reversible.
 
-## Features
+## Status
 
-- **Bulk Unsubscribe**: Unsubscribe from multiple newsletters at once
-- **Inbox Cleanup**: Archive or trash old promotional emails
-- **Privacy First**: All data processing happens in your browser
-- **Gmail Integration**: Connect securely via OAuth
-- **Separate Actions**: Unsubscribe and cleanup are independent operations
+Feature-complete for local use. `npm run verify` (typecheck + lint + tests) and
+`npm run build` both pass.
 
-## Tech Stack
+The one thing that is **not** done, because it cannot be done from a repository:
+you need your own Google OAuth credentials. See [Setup](#setup).
 
-- **Frontend**: Next.js 15, TypeScript, TailwindCSS, shadcn/ui
-- **Backend**: Next.js API Routes
-- **Authentication**: Google OAuth
-- **Email**: Gmail API
-- **State**: In-memory + localStorage (no database required for MVP)
+Before this can serve users other than yourself, it also needs to pass Google's
+OAuth verification — see [Going to production](#going-to-production).
 
-## Project Structure
+## Tech stack
 
-```
-inboxclean/
-├── app/                    # Next.js app directory
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Landing page
-│   ├── dashboard/         # Dashboard page
-│   ├── subscriptions/     # Subscriptions management
-│   ├── cleanup/           # Email cleanup
-│   ├── settings/          # User settings
-│   ├── api/               # API routes (Phase 2+)
-│   └── globals.css        # Global styles
-├── components/
-│   ├── ui/                # Reusable UI components
-│   │   ├── Button.tsx
-│   │   ├── Card.tsx
-│   │   └── Modal.tsx
-│   └── layout/            # Layout components
-│       ├── Header.tsx
-│       └── Sidebar.tsx
-├── hooks/                 # Custom React hooks
-├── types/                 # TypeScript types
-├── utils/                 # Utility functions
-├── lib/                   # Library utilities
-├── .env.local            # Environment variables
-├── tailwind.config.ts    # Tailwind configuration
-├── tsconfig.json         # TypeScript configuration
-└── package.json          # Dependencies
+| Concern | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router), React 18, TypeScript (strict) |
+| Styling | Tailwind CSS, `class-variance-authority` for component variants |
+| Components | Radix UI primitives (dialog, dropdown menu), `lucide-react` icons |
+| Auth | NextAuth v4, Google provider, JWT sessions |
+| Mail | Gmail API via `googleapis` |
+| Tests | Vitest |
+| Persistence | None server-side. Session in an encrypted cookie; an activity log in `localStorage` |
+
+## Setup
+
+### 1. Install
+
+```bash
+npm install
 ```
 
-## Setup Instructions
+### 2. Create Google OAuth credentials
 
-### Prerequisites
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+2. Enable the **Gmail API** for it.
+3. Configure the OAuth consent screen. Add the scope
+   `https://www.googleapis.com/auth/gmail.modify` and add your own Google
+   account under **Test users** — a restricted scope is limited to listed test
+   users until the app is verified.
+4. Create credentials → **OAuth client ID** → **Web application**.
+5. Add the authorized redirect URI exactly:
+   `http://localhost:3000/api/auth/callback/google`
+6. Copy the client ID and client secret.
 
-- Node.js 18+ and npm/yarn
-- Google OAuth credentials (from Google Cloud Console)
+### 3. Configure the environment
 
-### Installation
+Copy the template and fill in the two Google values:
 
-1. **Clone and install dependencies**:
-   ```bash
-   npm install
-   ```
+```bash
+cp .env.example .env.local
+```
 
-2. **Set up environment variables** in `.env.local`:
-   ```
-   NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id
-   GOOGLE_CLIENT_SECRET=your_google_client_secret
-   NEXTAUTH_SECRET=your_nextauth_secret
-   NEXTAUTH_URL=http://localhost:3000
-   ```
+```env
+GOOGLE_CLIENT_ID=…apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-…
+NEXTAUTH_SECRET=…
+NEXTAUTH_URL=http://localhost:3000
+```
 
-3. **Start development server**:
-   ```bash
-   npm run dev
-   ```
+Generate the session secret with:
 
-4. **Open browser**:
-   ```
-   http://localhost:3000
-   ```
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
 
-## Pages
+Note the variable name: **`GOOGLE_CLIENT_ID`**, not `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+The client ID is only ever read on the server and has no business in the browser
+bundle.
 
-### Landing Page (`/`)
-- Clean SaaS design with hero section
-- Feature highlights
-- How it works section
-- CTA to connect Gmail
+### 4. Run
 
-### Dashboard (`/dashboard`)
-- Total promotional emails count
-- Active senders count
-- Storage estimate
-- Quick action buttons
-- Recent activity log
-
-### Subscriptions (`/subscriptions`)
-- List of all promotional senders
-- Email count per sender
-- Last received date
-- Bulk unsubscribe actions
-- Individual unsubscribe/block options
-
-### Cleanup (`/cleanup`)
-- Grouped sender cleanup interface
-- Bulk selection
-- Confirmation modal before cleanup
-- Trash or archive actions
-- Email count preview
-
-### Settings (`/settings`)
-- Disconnect Gmail account
-- Privacy information
-- Data management options
-- Help & support links
-
-## Development Phases
-
-### Phase 1 ✅ (Current)
-- Project setup
-- Tailwind CSS configuration
-- shadcn/ui components
-- Routing and basic pages
-- UI components (Button, Card, Modal)
-- Layout components (Header, Sidebar)
-
-### Phase 2 (Next)
-- Google OAuth implementation
-- Gmail API connection
-- User authentication flow
-
-### Phase 3
-- Fetch promotional emails from Gmail
-- Group emails by sender
-- Display sender statistics
-
-### Phase 4
-- Implement cleanup actions (trash/archive)
-- Gmail API integration for bulk operations
-- Undo support
-
-### Phase 5
-- Unsubscribe functionality
-- List-Unsubscribe header support
-- Standard unsubscribe links
-
-### Phase 6
-- UI polish
-- Loading states
-- Error handling
-- Performance optimization
-
-## Testing Locally
-
-### Test Landing Page
 ```bash
 npm run dev
-# Visit http://localhost:3000
 ```
 
-### Test Navigation
-- Click "Connect Gmail" to navigate to dashboard
-- Use sidebar to navigate between pages
-- Test responsive design on mobile
+Open <http://localhost:3000> and choose **Connect Gmail**.
 
-### Test UI Components
-- Button variants: primary, secondary, danger, ghost
-- Card layouts with header, content, footer
-- Modal confirmation dialogs
-- Checkbox selections
+## Commands
 
-## Key Design Decisions
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server on :3000 |
+| `npm run build` | Production build |
+| `npm start` | Serve the production build |
+| `npm run lint` | ESLint (flat config, non-interactive) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest, once |
+| `npm run test:watch` | Vitest, watching |
+| `npm run verify` | typecheck + lint + test |
 
-1. **No Database Initially**: Using localStorage for MVP to reduce complexity
-2. **Client-Side Processing**: All email data processing happens in browser for privacy
-3. **Separate Unsubscribe/Cleanup**: Users can unsubscribe without cleaning old emails
-4. **Confirmation Modals**: Always confirm before bulk actions
-5. **Trash Over Delete**: Never permanently delete; move to trash first
+## How it works
 
-## Important UX Rules
+### Scanning
 
-1. Never permanently delete emails initially
-2. Always show confirmation modal for bulk cleanup
-3. Keep unsubscribe and cleanup completely separate
-4. Add undo support wherever possible
-5. Show email counts before actions
+`GET /api/emails/promotional` walks the Gmail Promotions category, requesting
+only the `From`, `List-Unsubscribe` and `List-Unsubscribe-Post` headers, then
+groups messages by sender.
 
-## Next Steps
+Two limits keep a scan inside Gmail's per-user quota (roughly 250 units/second,
+and `messages.get` costs 5): requests run through a concurrency cap with
+exponential backoff on 429 and 5xx, and the scan stops at
+`DEFAULT_SCAN_LIMIT` (500) messages. When there is more mail than that, the
+response sets `truncated` and the UI says so rather than presenting a partial
+count as the total.
 
-1. Install dependencies: `npm install`
-2. Set up Google OAuth credentials
-3. Configure `.env.local` with credentials
-4. Run `npm run dev` to start development
-5. Proceed to Phase 2 for authentication implementation
+### Unsubscribing
+
+`POST /api/emails/unsubscribe` takes a **sender address**, never a URL. The
+server finds that sender's recent mail in the user's own mailbox and reads the
+unsubscribe endpoint out of its headers.
+
+This matters: `List-Unsubscribe` values are written by whoever sent the mail. An
+endpoint that fetched a URL from the request body would let any caller point the
+server at `169.254.169.254` or anything else it can reach. Every URL is checked
+for scheme, credentials and resolved address before a request goes out, and each
+redirect hop is re-checked — see `lib/safe-fetch.ts`.
+
+When the sender advertises RFC 8058 one-click (`List-Unsubscribe-Post:
+List-Unsubscribe=One-Click`) the request is a POST with that body. A `mailto:`-only
+sender is reported as needing the user's action, because sending mail on the
+user's behalf would need a scope this app does not request.
+
+### Cleanup and undo
+
+Archive uses `messages.batchModify` to drop the `INBOX` label. Trash uses
+`messages.trash`, pooled under the same concurrency cap. Both are reversed by
+`POST /api/emails/undo`, offered as an Undo action on the confirmation toast.
+
+Nothing is ever permanently deleted. Gmail keeps trashed mail for 30 days.
+
+### Tokens
+
+The Google access and refresh tokens live in the NextAuth JWT, inside an
+encrypted HTTP-only cookie. They are **not** copied onto the session object, so
+`/api/auth/session` does not hand them to page scripts. Route handlers read them
+with `getToken()`.
+
+The JWT callback refreshes the access token about a minute before it expires. If
+the refresh token itself stops working, the session is stamped with
+`RefreshAccessTokenError` and the client starts a fresh consent flow.
+
+## Project structure
+
+```
+app/
+  api/
+    auth/[...nextauth]/route.ts   NextAuth handler
+    emails/promotional/route.ts   Scan and group
+    emails/archive/route.ts       Remove the INBOX label
+    emails/trash/route.ts         Move to trash
+    emails/undo/route.ts          Reverse either of the above
+    emails/unsubscribe/route.ts   Look up and call a sender's endpoint
+  page.tsx                        Landing page
+  dashboard/  subscriptions/  cleanup/  settings/
+  privacy/  terms/                Required for OAuth verification
+  error.tsx  loading.tsx  not-found.tsx
+components/
+  layout/    AppShell, Header, Sidebar, MobileNav, LegalPage
+  senders/   SenderToolbar (search + sort)
+  ui/        Button, Card, Modal, Spinner, Toast
+  marketing/ ConnectButton
+hooks/
+  useAuth, usePromotionalEmails, useSenderView
+lib/
+  auth.ts          NextAuth config and token refresh
+  gmail.ts         Gmail calls and header parsing
+  safe-fetch.ts    Outbound request guard
+  concurrency.ts   Pooling, chunking, retry
+  api-auth.ts      Token lookup and input validation for routes
+  api-client.ts    Browser-side fetch wrapper
+  format.ts        Relative time, byte sizes
+  history.ts       localStorage activity log
+middleware.ts      Edge protection for the app routes
+```
+
+Tests sit next to what they cover: `lib/*.test.ts`.
+
+## Tests
+
+The suite covers the layer where the bugs actually live — header parsing,
+sender grouping, the SSRF guard, the retry predicate, and formatting:
+
+```bash
+npm test
+```
+
+66 tests. Several encode specific bugs that were fixed, so they stay fixed: a
+sender's "last received" date must be the newest message rather than whichever
+was processed last; an unsubscribe link must be picked up from any of a sender's
+messages; a 403 is only retried when its reason is a rate limit.
+
+## Going to production
+
+1. Set `NEXTAUTH_URL` to your deployed `https://` origin.
+2. Add `https://your-domain/api/auth/callback/google` to the OAuth client's
+   authorized redirect URIs.
+3. Generate a fresh `NEXTAUTH_SECRET` — do not reuse the development one.
+4. Put your own contact details and legal entity into `app/privacy/page.tsx`;
+   the placeholder paragraph says where.
+
+Then the part that takes calendar time: `gmail.modify` is a **restricted scope**.
+Until the app passes Google's OAuth verification *and* an annual CASA security
+assessment, it is capped at 100 test users and shows an unverified-app warning.
+Verification needs a hosted privacy policy, a homepage on a verified domain, a
+demo video of the consent flow, and a written scope justification. Start it
+early; it is the long pole, not the code.
+
+### Known dependency advisories
+
+`npm audit` reports two remaining issues (one moderate in `next`, one high in the
+`postcss` that Next bundles). Both are only resolved by Next 16, a major upgrade
+that also requires React 19. The `postcss` advisories concern attacker-controlled
+CSS, and this app serves no third-party CSS. Revisit when you take the Next 16
+upgrade deliberately.
 
 ## License
 

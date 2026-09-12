@@ -1,5 +1,17 @@
 # PHASE 2 COMPLETE: Google OAuth & Gmail API Integration ✅
 
+> **Historical snapshot.** This file records what was built during phase 2 and is
+> kept for the project history. It is *not* a description of the current code —
+> some statements below described intent rather than what actually shipped.
+> **[README.md](README.md) is the source of truth.**
+>
+> Since superseded: the Subscriptions and Cleanup screens no longer use mock data,
+> and the claims about automatic token refresh and tokens being kept from the
+> client — untrue when this was written — are now actually implemented. See
+> "Tokens" in [README.md](README.md).
+
+---
+
 ## What Was Built
 
 ### 1. Authentication System
@@ -135,7 +147,7 @@ types/
 
 Edit `.env.local`:
 ```env
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_ID=your_client_id
 GOOGLE_CLIENT_SECRET=your_client_secret
 NEXTAUTH_SECRET=generate_random_secret
 NEXTAUTH_URL=http://localhost:3000
@@ -232,7 +244,7 @@ curl -X POST http://localhost:3000/api/emails/archive \
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Yes | Google OAuth Client ID |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth Client Secret |
 | `NEXTAUTH_SECRET` | Yes | Secret for JWT signing |
 | `NEXTAUTH_URL` | Yes | Application URL |

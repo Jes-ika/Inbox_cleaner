@@ -1,189 +1,127 @@
-# InboxClean - Quick Start Guide
+# InboxClean — quick start
 
-## 🚀 Get Started in 5 Minutes
+The five-minute version. [README.md](README.md) has the detail.
 
-### Step 1: Clone/Setup
+## 1. Install
+
 ```bash
-cd C:\Users\jesik\Desktop\inboxcleaner
 npm install
 ```
 
-### Step 2: Get Google Credentials
-1. Go to https://console.cloud.google.com/
-2. Create new project
-3. Enable Gmail API
-4. Create OAuth 2.0 credentials (Web app)
-5. Add redirect: `http://localhost:3000/api/auth/callback/google`
-6. Copy Client ID and Secret
+## 2. Google credentials
 
-### Step 3: Configure Environment
-Create/edit `.env.local`:
+[console.cloud.google.com](https://console.cloud.google.com/) →
+
+1. New project
+2. Enable the **Gmail API**
+3. OAuth consent screen → add scope `https://www.googleapis.com/auth/gmail.modify`
+   → add your own account under **Test users**
+4. Credentials → OAuth client ID → **Web application**
+5. Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+6. Copy the client ID and secret
+
+Step 3 is the one people skip. A restricted scope will not work for an account
+that is not on the test-user list.
+
+## 3. Environment
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in:
+
 ```env
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_client_id
-GOOGLE_CLIENT_SECRET=your_client_secret
-NEXTAUTH_SECRET=your_random_secret
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+NEXTAUTH_SECRET=...
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-Generate secret:
+Secret:
+
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-### Step 4: Run
+## 4. Run
+
 ```bash
 npm run dev
 ```
 
-Visit: http://localhost:3000
+<http://localhost:3000> → **Connect Gmail**.
 
-### Step 5: Test
-1. Click "Connect Gmail"
-2. Complete Google OAuth
-3. See dashboard with email stats
-
-## 📁 Project Structure
-
-```
-inboxcleaner/
-├── app/                    # Pages & API routes
-│   ├── page.tsx           # Landing
-│   ├── dashboard/         # Dashboard
-│   ├── subscriptions/     # Subscriptions
-│   ├── cleanup/           # Cleanup
-│   ├── settings/          # Settings
-│   └── api/               # API routes
-├── components/            # React components
-├── hooks/                 # Custom hooks
-├── lib/                   # Utilities
-├── types/                 # TypeScript types
-└── utils/                 # Constants
-```
-
-## 🔑 Key Files
-
-| File | Purpose |
-|------|---------|
-| `lib/auth.ts` | NextAuth configuration |
-| `lib/gmail.ts` | Gmail API utilities |
-| `hooks/useAuth.ts` | Authentication hook |
-| `app/api/auth/[...nextauth]/route.ts` | Auth handler |
-| `app/api/emails/promotional/route.ts` | Fetch emails |
-
-## 🎯 Main Features
-
-- ✅ Google OAuth authentication
-- ✅ Fetch promotional emails
-- ✅ Group emails by sender
-- ✅ Archive/trash emails
-- ✅ Unsubscribe from senders
-- ✅ Protected pages
-- ✅ Real-time stats
-
-## 📊 API Endpoints
-
-```
-GET  /api/emails/promotional      # Fetch promotional emails
-POST /api/emails/archive          # Archive emails
-POST /api/emails/trash            # Trash emails
-POST /api/emails/unsubscribe      # Unsubscribe from sender
-GET  /api/auth/session            # Get session
-POST /api/auth/signin             # Sign in
-POST /api/auth/signout            # Sign out
-```
-
-## 🧪 Test Commands
+## Checking it works
 
 ```bash
-# Start dev server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run linter
-npm run lint
+npm run verify    # typecheck + lint + 66 tests
+npm run build     # production build
 ```
 
-## 🔐 Environment Variables
+Signed out, these should hold — they are quick to check with curl:
 
-| Variable | Example |
-|----------|---------|
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `123456789.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | `GOCSPX-xxxxx` |
-| `NEXTAUTH_SECRET` | `random_hex_string` |
-| `NEXTAUTH_URL` | `http://localhost:3000` |
+| Request | Expected |
+| --- | --- |
+| `GET /` | 200 |
+| `GET /dashboard` | 307 → `/?callbackUrl=%2Fdashboard` |
+| `GET /api/emails/promotional` | 401 `{"error":"Not signed in."}` |
+| `GET /api/auth/providers` | lists the `google` provider |
 
-## 🐛 Troubleshooting
+## Screens
 
-### "Invalid Client ID"
-- Check `.env.local` has correct credentials
-- Verify in Google Cloud Console
+| Route | What it does |
+| --- | --- |
+| `/` | Landing page; **Connect Gmail** starts the Google consent flow |
+| `/dashboard` | Message count, sender count, mailbox size, top senders |
+| `/subscriptions` | Per-sender unsubscribe, one or many, with the outcome per sender |
+| `/cleanup` | Select senders → trash or archive their mail → Undo |
+| `/settings` | Account, granted scope, activity log, clear local data |
+| `/privacy`, `/terms` | Public; required for Google OAuth verification |
 
-### "Redirect URI mismatch"
-- Add `http://localhost:3000/api/auth/callback/google` to authorized URIs
+## API
 
-### "Gmail API not enabled"
-- Enable Gmail API in Google Cloud Console
-- Wait 5 minutes for changes
+| Endpoint | Body | Notes |
+| --- | --- | --- |
+| `GET /api/emails/promotional` | — | `?limit=` up to 2000, defaults to 500 |
+| `POST /api/emails/archive` | `{messageIds}` | Removes the `INBOX` label |
+| `POST /api/emails/trash` | `{messageIds}` | Recoverable for 30 days |
+| `POST /api/emails/undo` | `{kind, messageIds}` | `kind` is `trash` or `archive` |
+| `POST /api/emails/unsubscribe` | `{sender}` | A sender **address**, never a URL |
 
-### "No emails found"
-- Check you have promotional emails in Gmail
-- Gmail API returns last 30 days by default
+Every route requires a session. `messageIds` is capped at 1000 per request and
+each id is validated.
 
-## 📚 Documentation
+## Troubleshooting
 
-- `README.md` - Full documentation
-- `PHASE1_SUMMARY.md` - Phase 1 details
-- `PHASE2_SETUP.md` - Phase 2 setup guide
-- `PHASE2_SUMMARY.md` - Phase 2 details
+**`invalid_client` / "The OAuth client was not found"**
+The client ID is wrong or empty. Check `.env.local` uses `GOOGLE_CLIENT_ID`
+(no `NEXT_PUBLIC_` prefix) and restart the dev server — Next only reads env
+files at startup.
 
-## 🚢 Deployment
+**`redirect_uri_mismatch`**
+The URI in the Google client must be exactly
+`http://localhost:3000/api/auth/callback/google`.
 
-### For Production
-1. Update `NEXTAUTH_URL` to your domain
-2. Add domain to Google OAuth authorized URIs
-3. Generate strong `NEXTAUTH_SECRET`
-4. Deploy to Vercel, Netlify, or your server
+**"Google hasn't verified this app"**
+Expected. Add yourself as a test user on the consent screen and continue past it.
 
-### Vercel (Recommended)
-```bash
-npm install -g vercel
-vercel
-```
+**Signed in, but every request returns 401 with `reauth_required`**
+The refresh token stopped working. The app starts a new consent flow on its own;
+if it loops, remove the app from
+[your Google permissions](https://myaccount.google.com/permissions) and connect again.
 
-## 💡 Tips
+**No emails found**
+The scan reads the Promotions category only (`category:promotions`). If Gmail
+puts your newsletters elsewhere, change `GMAIL_QUERY` in `utils/constants.ts`.
 
-- Use `useAuth()` hook to access user session
-- All API routes require authentication
-- Protected pages redirect to home if not authenticated
-- Gmail API has rate limits (check quotas)
-- Access tokens refresh automatically
+**`npm run dev` shows old env values**
+Restart it. Env changes are not hot-reloaded.
 
-## 🎓 Learning Resources
+## Deploying
 
-- [NextAuth.js Docs](https://next-auth.js.org/)
-- [Gmail API Guide](https://developers.google.com/gmail/api)
-- [Next.js Documentation](https://nextjs.org/docs)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-
-## 📞 Support
-
-For issues:
-1. Check troubleshooting section
-2. Review error messages
-3. Check browser console
-4. Check server logs
-
-## 🎉 You're Ready!
-
-Your InboxClean MVP is ready to use. Start with:
-1. `npm run dev`
-2. Visit http://localhost:3000
-3. Click "Connect Gmail"
-4. Explore the dashboard
-
-Happy cleaning! 🧹
+Set `NEXTAUTH_URL` to the deployed origin, register that origin's callback with
+Google, and generate a fresh `NEXTAUTH_SECRET`. Read the
+[production section](README.md#going-to-production) first — `gmail.modify` is a
+restricted scope, and Google's verification is what actually gates a public
+launch.

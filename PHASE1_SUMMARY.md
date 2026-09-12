@@ -1,5 +1,17 @@
 # PHASE 1: Project Setup - Complete ✅
 
+> **Historical snapshot.** This file records what was built during phase 1 and is
+> kept for the project history. It is *not* a description of the current code —
+> some statements below described intent rather than what actually shipped.
+> **[README.md](README.md) is the source of truth.**
+>
+> Since superseded: the dashboard has no activity log (it lives in Settings, read
+> from `localStorage`), and undo is offered on a toast after a cleanup rather than
+> in the cleanup footer. The mock data described here is gone — both list screens
+> read live Gmail data.
+
+---
+
 ## What Was Built
 
 ### 1. Project Foundation
@@ -153,7 +165,7 @@ http://localhost:3000
 
 ### Current .env.local
 ```
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_ID=your_google_client_id_here
 GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 NEXTAUTH_SECRET=your_nextauth_secret_here
 NEXTAUTH_URL=http://localhost:3000

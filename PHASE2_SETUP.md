@@ -1,5 +1,17 @@
 # PHASE 2: Google OAuth & Gmail API Setup Guide
 
+> **Historical snapshot.** This file records what was built during phase 2 setup and is
+> kept for the project history. It is *not* a description of the current code —
+> some statements below described intent rather than what actually shipped.
+> **[README.md](README.md) is the source of truth.**
+>
+> Since superseded: the environment variable is `GOOGLE_CLIENT_ID` (no
+> `NEXT_PUBLIC_` prefix), only the `gmail.modify` scope is requested, and the
+> "Google+ API" step is obsolete. Follow
+> [QUICK_START.md](QUICK_START.md) instead.
+
+---
+
 ## What Was Built
 
 ✅ **Google OAuth Authentication**
@@ -49,7 +61,7 @@
 Edit `.env.local`:
 
 ```env
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your_client_id_from_google_console
+GOOGLE_CLIENT_ID=your_client_id_from_google_console
 GOOGLE_CLIENT_SECRET=your_client_secret_from_google_console
 NEXTAUTH_SECRET=generate_a_random_secret_here
 NEXTAUTH_URL=http://localhost:3000
@@ -223,7 +235,7 @@ curl -X POST http://localhost:3000/api/emails/trash \
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Yes | Google OAuth Client ID |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth Client Secret |
 | `NEXTAUTH_SECRET` | Yes | Secret for JWT signing |
 | `NEXTAUTH_URL` | Yes | Application URL (http://localhost:3000 for dev) |
