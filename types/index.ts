@@ -22,6 +22,12 @@ export interface EmailSender {
   inboxMessageIds: string[]
   inboxCount: number
   inboxSizeBytes: number
+  /**
+   * Newest date within the inbox subset. Cleanup shows and sorts on this, so its
+   * dates describe mail it will actually touch; Subscriptions uses the unscoped
+   * `lastReceived`, which is right there.
+   */
+  inboxLastReceived: string
 
   unsubscribe: UnsubscribeTarget | null
 }
@@ -38,6 +44,18 @@ export interface PromotionalSummary {
   /** The subset still in the inbox — what Cleanup can actually clear. */
   inboxEmails: number
   inboxSizeBytes: number
+
+  /**
+   * Gmail's own approximate totals, one cheap list call each.
+   *
+   * Needed because the scan window is now the whole Promotions category: a
+   * 500-message budget shared with archived mail can yield far fewer inbox
+   * messages than it used to, and `truncated` alone cannot say how much of the
+   * user's actual inbox was covered.
+   */
+  totalEstimate: number
+  inboxEstimate: number
+
   /** True when the mailbox holds more messages than this scan covered. */
   truncated: boolean
 }

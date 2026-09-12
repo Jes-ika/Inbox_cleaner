@@ -18,6 +18,7 @@ function sender(
     inboxMessageIds: inboxIds,
     inboxCount: inboxIds.length,
     inboxSizeBytes: inboxIds.length * 1000,
+    inboxLastReceived: new Date(1_700_000_000_000).toISOString(),
     unsubscribe: null,
   }
 }
@@ -30,6 +31,8 @@ function summaryOf(senders: EmailSender[]): PromotionalSummary {
     totalSizeBytes: senders.reduce((n, s) => n + s.sizeBytes, 0),
     inboxEmails: senders.reduce((n, s) => n + s.inboxCount, 0),
     inboxSizeBytes: senders.reduce((n, s) => n + s.inboxSizeBytes, 0),
+    totalEstimate: senders.reduce((n, s) => n + s.emailCount, 0),
+    inboxEstimate: senders.reduce((n, s) => n + s.inboxCount, 0),
     truncated: false,
   }
 }

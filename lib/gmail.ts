@@ -15,6 +15,14 @@ const LIST_PAGE_SIZE = 500
 const BATCH_MODIFY_SIZE = 1000
 
 /**
+ * How many of a sender's messages the unsubscribe lookup reads.
+ *
+ * The scan ranks targets across its whole window, so reading too few here makes
+ * the lookup disagree with the badge the UI showed.
+ */
+const UNSUBSCRIBE_LOOKUP_MESSAGES = 20
+
+/**
  * Gmail budgets roughly 250 quota units per second per user, and messages.get
  * costs 5. Eight in flight leaves room for the mutations a user triggers while
  * a scan is still running.
@@ -211,6 +219,11 @@ export function groupMessagesBySender(messages: ParsedMessage[]): EmailSender[] 
         inboxMessageIds: inboxMessages.map((m) => m.id),
         inboxCount: inboxMessages.length,
         inboxSizeBytes: sender.inboxSizeBytes,
+        // inboxMessages is already newest-first; fall back to the unscoped date
+        // when nothing is left in the inbox.
+        inboxLastReceived: new Date(
+          inboxMessages[0]?.receivedAt ?? sender.receivedAt,
+        ).toISOString(),
         unsubscribe: sender.unsubscribe,
       }
     })
@@ -225,9 +238,10 @@ export function groupMessagesBySender(messages: ParsedMessage[]): EmailSender[] 
 async function listMessageIds(
   gmail: gmail_v1.Gmail,
   limit: number,
-): Promise<{ ids: string[]; truncated: boolean }> {
+): Promise<{ ids: string[]; truncated: boolean; estimate: number }> {
   const ids: string[] = []
   let pageToken: string | undefined
+  let estimate = 0
 
   do {
     const remaining = limit - ids.length
@@ -240,6 +254,9 @@ async function listMessageIds(
       }),
     )
 
+    // Gmail reports this on every page; the first one covers the whole query.
+    if (estimate === 0) estimate = response.data.resultSizeEstimate ?? 0
+
     for (const message of response.data.messages ?? []) {
       if (message.id) ids.push(message.id)
     }
@@ -247,7 +264,21 @@ async function listMessageIds(
     pageToken = response.data.nextPageToken ?? undefined
   } while (pageToken && ids.length < limit)
 
-  return { ids, truncated: Boolean(pageToken) }
+  return { ids, truncated: Boolean(pageToken), estimate }
+}
+
+/** One quota unit: how much promotional mail is actually in the inbox. */
+async function estimateInboxTotal(gmail: gmail_v1.Gmail): Promise<number> {
+  try {
+    const response = await withRetry(() =>
+      gmail.users.messages.list({ userId: 'me', q: `in:inbox ${GMAIL_QUERY}`, maxResults: 1 }),
+    )
+    return response.data.resultSizeEstimate ?? 0
+  } catch (error) {
+    // A missing estimate degrades the coverage notice, not the scan.
+    console.error('Could not estimate the inbox total:', error)
+    return 0
+  }
 }
 
 /**
@@ -264,7 +295,10 @@ export async function scanPromotionalEmails(
   const gmail = getGmailClient(accessToken)
   const bounded = Math.max(1, Math.min(Math.floor(limit) || DEFAULT_SCAN_LIMIT, MAX_SCAN_LIMIT))
 
-  const { ids, truncated } = await listMessageIds(gmail, bounded)
+  const [{ ids, truncated, estimate }, inboxEstimate] = await Promise.all([
+    listMessageIds(gmail, bounded),
+    estimateInboxTotal(gmail),
+  ])
 
   const parsed = await mapWithConcurrency(ids, FETCH_CONCURRENCY, async (id) => {
     const response = await withRetry(() =>
@@ -297,6 +331,8 @@ export async function scanPromotionalEmails(
     totalSizeBytes: parsed.reduce((sum, message) => sum + message.sizeBytes, 0),
     inboxEmails: inbox.length,
     inboxSizeBytes: inbox.reduce((sum, message) => sum + message.sizeBytes, 0),
+    totalEstimate: estimate,
+    inboxEstimate,
     truncated,
   }
 }
@@ -418,9 +454,15 @@ export async function findUnsubscribeTarget(
       // the whole mailbox. Every sender the UI can ask about came out of this
       // same scan, so their mail matches.
       q: `from:"${senderEmail}" ${GMAIL_QUERY}`,
-      maxResults: 5,
+      maxResults: UNSUBSCRIBE_LOOKUP_MESSAGES,
     }),
   )
+
+  // Rank across the sender's messages, the same way the scan does. Returning
+  // the first target found made the lookup disagree with the badge the UI had
+  // already shown: a sender advertised as one-click would unsubscribe by
+  // whatever its newest message happened to carry — often a mailto.
+  let best: UnsubscribeTarget | null = null
 
   for (const ref of list.data.messages ?? []) {
     if (!ref.id) continue
@@ -440,8 +482,11 @@ export async function findUnsubscribeTarget(
       parseEmailHeader(headers, 'List-Unsubscribe-Post'),
     )
 
-    if (target) return target
+    best = preferredTarget(best, target)
+
+    // Nothing outranks one-click, so stop paying for reads once we have it.
+    if (best && best.kind === 'http' && best.oneClick) return best
   }
 
-  return null
+  return best
 }

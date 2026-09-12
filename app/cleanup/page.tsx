@@ -4,6 +4,7 @@ import { Archive, RefreshCw, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
+import { ScanCoverage } from '@/components/senders/ScanCoverage'
 import { SenderToolbar } from '@/components/senders/SenderToolbar'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -23,7 +24,7 @@ const MODAL_SENDER_PREVIEW = 8
 
 function CleanupContent() {
   const searchParams = useSearchParams()
-  const { senders, isLoading, error, reload, applyCleanup } = usePromotionalEmails()
+  const { summary, senders, isLoading, error, reload, applyCleanup } = usePromotionalEmails()
   const { toast } = useToast()
 
   // Cleanup can only act on mail still in the inbox: archiving an already
@@ -39,6 +40,9 @@ function CleanupContent() {
           emailCount: sender.inboxCount,
           messageIds: sender.inboxMessageIds,
           sizeBytes: sender.inboxSizeBytes,
+          // Otherwise the date column and both date sorts would describe a
+          // message that is already archived and will not be touched.
+          lastReceived: sender.inboxLastReceived,
         })),
     [senders],
   )
@@ -48,20 +52,26 @@ function CleanupContent() {
 
   // Arrived from a Subscriptions "Clean up" link for a sender whose mail is all
   // archived: "no senders match this filter" would be true but unhelpful.
+  // Addresses are lowercased at parse time, and the filter compares
+  // case-insensitively, so normalise here too — and only explain the link while
+  // the filter still *is* the link, or the message outlives the search that
+  // caused it.
   const linkedSender = searchParams.get('sender')
+  const linkedNeedle = linkedSender?.trim().toLowerCase() ?? null
   const linkedSenderIsArchived = Boolean(
-    linkedSender &&
-      senders.some((sender) => sender.email === linkedSender && sender.inboxCount === 0),
+    linkedNeedle &&
+      view.query.trim().toLowerCase() === linkedNeedle &&
+      senders.some((sender) => sender.email === linkedNeedle && sender.inboxCount === 0),
   )
   const [action, setAction] = useState<CleanupActionKind | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
   // Arriving from a "Clean up" link on the Subscriptions page.
   useEffect(() => {
-    if (linkedSender) view.setQuery(linkedSender)
+    if (linkedNeedle) view.setQuery(linkedNeedle)
     // Only when the link changes; the user is free to edit the filter afterwards.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkedSender])
+  }, [linkedNeedle])
 
   const visibleEmails = view.visible.map((sender) => sender.email)
   const allVisibleSelected =
@@ -193,6 +203,8 @@ function CleanupContent() {
         </div>
       ) : null}
 
+      <ScanCoverage summary={summary} scope="inbox" />
+
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4">
@@ -233,13 +245,15 @@ function CleanupContent() {
             </p>
           ) : view.visible.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
-              {inboxSenders.length === 0
-                ? senders.length === 0
-                  ? 'Nothing left to clean up.'
-                  : 'No promotional mail left in your inbox — the rest is already archived.'
+              {error
+                ? 'The scan did not complete, so there is nothing to show yet.'
                 : linkedSenderIsArchived
                   ? 'That sender has no mail left in your inbox, so there is nothing to clean up. You can still unsubscribe from them.'
-                  : 'No senders match this filter.'}
+                  : inboxSenders.length === 0
+                    ? senders.length === 0
+                      ? 'Nothing left to clean up.'
+                      : 'No promotional mail left in your inbox — the rest is already archived.'
+                    : 'No senders match this filter.'}
             </p>
           ) : (
             <div className="space-y-2">

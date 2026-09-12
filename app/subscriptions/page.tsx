@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, MailX, RefreshCw, Trash2 } f
 import Link from 'next/link'
 import { useCallback, useState } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
+import { ScanCoverage } from '@/components/senders/ScanCoverage'
 import { SenderToolbar } from '@/components/senders/SenderToolbar'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
@@ -31,7 +32,7 @@ const OUTCOME_STYLES: Record<UnsubscribeStatus, { icon: typeof CheckCircle2; cla
 }
 
 export default function SubscriptionsPage() {
-  const { senders, isLoading, error, reload } = usePromotionalEmails()
+  const { summary, senders, isLoading, error, reload } = usePromotionalEmails()
   const { toast } = useToast()
 
   const view = useSenderView(senders, { unsubscribableOnly: true })
@@ -41,6 +42,14 @@ export default function SubscriptionsPage() {
 
   const visibleEmails = view.visible.map((sender) => sender.email)
   const allVisibleSelected = visibleEmails.length > 0 && visibleEmails.every((e) => selected.includes(e))
+
+  // Bulk unsubscribe acts only on senders that are BOTH listed and eligible.
+  // An unsubscribe is an irreversible request to a third party, so a filter must
+  // not be able to hide who it goes to — and select-all would otherwise include
+  // senders whose own row button is disabled for publishing no link at all.
+  const bulkTargets = view.visible.filter(
+    (sender) => selected.includes(sender.email) && sender.unsubscribe,
+  )
 
   const toggle = (email: string) =>
     setSelected((prev) => (prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]))
@@ -97,7 +106,8 @@ export default function SubscriptionsPage() {
   }
 
   const unsubscribeSelected = async () => {
-    const targets = [...selected]
+    const targets = bulkTargets.map((sender) => sender.email)
+    if (targets.length === 0) return
 
     // Sequential on purpose: these are requests to other people's servers, and a
     // burst of them from one IP is what rate limiting exists to stop.
@@ -147,6 +157,8 @@ export default function SubscriptionsPage() {
         </div>
       ) : null}
 
+      <ScanCoverage summary={summary} scope="all" />
+
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4">
@@ -162,7 +174,10 @@ export default function SubscriptionsPage() {
                 ) : null}
               </h2>
               {selected.length > 0 ? (
-                <span className="text-sm text-gray-600">{selected.length} selected</span>
+                <span className="text-sm text-gray-600">
+                  {formatCount(bulkTargets.length)} of {formatCount(selected.length)} selected can
+                  be unsubscribed
+                </span>
               ) : null}
             </div>
 
@@ -186,9 +201,11 @@ export default function SubscriptionsPage() {
             </p>
           ) : view.visible.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
-              {senders.length === 0
-                ? 'No promotional senders found.'
-                : 'No senders match this filter.'}
+              {error
+                ? 'The scan did not complete, so there is nothing to show yet.'
+                : senders.length === 0
+                  ? 'No promotional senders found.'
+                  : 'No senders match this filter.'}
             </p>
           ) : (
             <div className="space-y-2">
@@ -312,14 +329,26 @@ export default function SubscriptionsPage() {
             </div>
           )}
 
+          {/* Gated on the raw selection, not on the eligible subset: otherwise a
+              selection of senders that publish no link would hide the bar and
+              leave the user with checked boxes and no way to clear them. */}
           {selected.length > 0 ? (
-            <div className="mt-6 flex flex-wrap gap-3 border-t border-gray-200 pt-6">
-              <Button onClick={() => void unsubscribeSelected()} isLoading={busy}>
-                Unsubscribe from {selected.length} selected
+            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-6">
+              <Button
+                onClick={() => void unsubscribeSelected()}
+                isLoading={busy}
+                disabled={bulkTargets.length === 0}
+              >
+                Unsubscribe from {formatCount(bulkTargets.length)} selected
               </Button>
               <Button variant="ghost" onClick={() => setSelected([])} disabled={busy}>
                 Clear selection
               </Button>
+              {bulkTargets.length === 0 ? (
+                <span className="text-sm text-gray-600">
+                  None of the selected senders publish an unsubscribe link.
+                </span>
+              ) : null}
             </div>
           ) : null}
         </CardContent>

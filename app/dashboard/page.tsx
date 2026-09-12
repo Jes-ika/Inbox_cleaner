@@ -3,6 +3,7 @@
 import { HardDrive, Mail, RefreshCw, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { AppShell } from '@/components/layout/AppShell'
+import { ScanCoverage } from '@/components/senders/ScanCoverage'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
@@ -57,12 +58,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {summary?.truncated ? (
-        <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          You have more promotional mail than one scan covers. These figures describe the{' '}
-          {formatCount(summary.totalEmails)} most recent messages.
-        </p>
-      ) : null}
+      <ScanCoverage summary={summary} scope="all" />
 
       <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, tone }) => (
@@ -112,6 +108,11 @@ export default function DashboardPage() {
             <p className="py-6 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
               Reading your promotional mail…
+            </p>
+          ) : error ? (
+            // Never assert a fact about the mailbox we could not read.
+            <p className="py-6 text-center text-gray-600">
+              The scan did not complete, so there is nothing to show yet.
             </p>
           ) : senders.length === 0 ? (
             <p className="py-6 text-center text-gray-600">
