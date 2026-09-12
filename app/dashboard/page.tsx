@@ -6,20 +6,18 @@ import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
-import { useAuth } from '@/hooks/useAuth'
 import { usePromotionalEmails } from '@/hooks/usePromotionalEmails'
 import { formatBytes, formatCount, formatRelativeTime } from '@/lib/format'
 import { ROUTES } from '@/utils/constants'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { isAuthenticated } = useAuth()
-  const { summary, senders, isLoading, error, reload } = usePromotionalEmails(isAuthenticated)
+  const { summary, senders, isLoading, error, reload } = usePromotionalEmails()
 
   const stats = [
     {
       label: 'Promotional in inbox',
-      value: summary ? `${formatCount(summary.totalEmails)}${summary.truncated ? '+' : ''}` : '—',
+      value: summary ? `${formatCount(summary.inboxEmails)}${summary.truncated ? '+' : ''}` : '—',
       icon: Mail,
       tone: 'text-blue-600',
     },
@@ -30,7 +28,7 @@ export default function DashboardPage() {
       tone: 'text-green-600',
     },
     {
-      label: 'Mailbox space',
+      label: 'Promotional mail total',
       value: summary ? formatBytes(summary.totalSizeBytes) : '—',
       icon: HardDrive,
       tone: 'text-orange-600',
@@ -61,7 +59,7 @@ export default function DashboardPage() {
 
       {summary?.truncated ? (
         <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Your inbox holds more promotional mail than one scan covers. These figures describe the{' '}
+          You have more promotional mail than one scan covers. These figures describe the{' '}
           {formatCount(summary.totalEmails)} most recent messages.
         </p>
       ) : null}
@@ -113,7 +111,7 @@ export default function DashboardPage() {
           {isLoading && senders.length === 0 ? (
             <p className="py-6 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
-              Reading the promotional mail in your inbox…
+              Reading your promotional mail…
             </p>
           ) : senders.length === 0 ? (
             <p className="py-6 text-center text-gray-600">

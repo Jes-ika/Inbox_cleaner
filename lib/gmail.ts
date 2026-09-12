@@ -32,6 +32,8 @@ export interface ParsedMessage {
   /** Unix milliseconds; 0 when Gmail reported no internalDate. */
   receivedAt: number
   sizeBytes: number
+  /** Still carries the INBOX label, so archiving it would actually do something. */
+  inInbox: boolean
   headers: MessageHeader[]
 }
 
@@ -145,7 +147,8 @@ export function groupMessagesBySender(messages: ParsedMessage[]): EmailSender[] 
     emailCount: number
     receivedAt: number
     sizeBytes: number
-    messages: Array<{ id: string; receivedAt: number }>
+    inboxSizeBytes: number
+    messages: Array<{ id: string; receivedAt: number; inInbox: boolean }>
     unsubscribe: UnsubscribeTarget | null
   }
 
@@ -166,7 +169,12 @@ export function groupMessagesBySender(messages: ParsedMessage[]): EmailSender[] 
     if (existing) {
       existing.emailCount += 1
       existing.sizeBytes += message.sizeBytes
-      existing.messages.push({ id: message.id, receivedAt: message.receivedAt })
+      if (message.inInbox) existing.inboxSizeBytes += message.sizeBytes
+      existing.messages.push({
+        id: message.id,
+        receivedAt: message.receivedAt,
+        inInbox: message.inInbox,
+      })
       existing.unsubscribe = preferredTarget(existing.unsubscribe, target)
       if (message.receivedAt > existing.receivedAt) {
         existing.receivedAt = message.receivedAt
@@ -182,23 +190,30 @@ export function groupMessagesBySender(messages: ParsedMessage[]): EmailSender[] 
       emailCount: 1,
       receivedAt: message.receivedAt,
       sizeBytes: message.sizeBytes,
-      messages: [{ id: message.id, receivedAt: message.receivedAt }],
+      inboxSizeBytes: message.inInbox ? message.sizeBytes : 0,
+      messages: [{ id: message.id, receivedAt: message.receivedAt, inInbox: message.inInbox }],
       unsubscribe: target,
     })
   }
 
   return Array.from(bySender.values())
-    .map((sender) => ({
-      email: sender.email,
-      name: sender.name,
-      emailCount: sender.emailCount,
-      lastReceived: new Date(sender.receivedAt).toISOString(),
-      messageIds: sender.messages
-        .sort((a, b) => b.receivedAt - a.receivedAt)
-        .map((m) => m.id),
-      sizeBytes: sender.sizeBytes,
-      unsubscribe: sender.unsubscribe,
-    }))
+    .map((sender) => {
+      const newestFirst = [...sender.messages].sort((a, b) => b.receivedAt - a.receivedAt)
+      const inboxMessages = newestFirst.filter((m) => m.inInbox)
+
+      return {
+        email: sender.email,
+        name: sender.name,
+        emailCount: sender.emailCount,
+        lastReceived: new Date(sender.receivedAt).toISOString(),
+        messageIds: newestFirst.map((m) => m.id),
+        sizeBytes: sender.sizeBytes,
+        inboxMessageIds: inboxMessages.map((m) => m.id),
+        inboxCount: inboxMessages.length,
+        inboxSizeBytes: sender.inboxSizeBytes,
+        unsubscribe: sender.unsubscribe,
+      }
+    })
     .sort((a, b) => b.emailCount - a.emailCount || a.name.localeCompare(b.name))
 }
 
@@ -265,6 +280,7 @@ export async function scanPromotionalEmails(
       id: response.data.id ?? id,
       receivedAt: Number.parseInt(response.data.internalDate ?? '', 10) || 0,
       sizeBytes: response.data.sizeEstimate ?? 0,
+      inInbox: (response.data.labelIds ?? []).includes('INBOX'),
       headers: normalizeHeaders(response.data.payload?.headers),
     }
     return message
@@ -272,11 +288,15 @@ export async function scanPromotionalEmails(
 
   const senders = groupMessagesBySender(parsed)
 
+  const inbox = parsed.filter((message) => message.inInbox)
+
   return {
     senders,
     totalEmails: parsed.length,
     totalSenders: senders.length,
     totalSizeBytes: parsed.reduce((sum, message) => sum + message.sizeBytes, 0),
+    inboxEmails: inbox.length,
+    inboxSizeBytes: inbox.reduce((sum, message) => sum + message.sizeBytes, 0),
     truncated,
   }
 }
@@ -393,7 +413,11 @@ export async function findUnsubscribeTarget(
   const list = await withRetry(() =>
     gmail.users.messages.list({
       userId: 'me',
-      q: `from:"${senderEmail}"`,
+      // Scoped the same way as the scan. The privacy policy discloses reading
+      // promotional mail only, and a bare `from:` search would quietly reach
+      // the whole mailbox. Every sender the UI can ask about came out of this
+      // same scan, so their mail matches.
+      q: `from:"${senderEmail}" ${GMAIL_QUERY}`,
       maxResults: 5,
     }),
   )

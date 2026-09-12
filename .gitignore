@@ -17,3 +17,11 @@ dist/
 
 # test output
 coverage/
+
+# scratch from review/verification runs
+.review-tmp/
+*.review.mts
+__probe*
+
+# TypeScript incremental build cache
+*.tsbuildinfo

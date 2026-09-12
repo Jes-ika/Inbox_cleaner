@@ -250,8 +250,10 @@ export interface SafeFetchResult {
  * Fetch a vetted URL, re-validating every redirect hop and giving up quickly.
  *
  * The response body is never read. Buffering it would let a hostile endpoint
- * stream hundreds of megabytes into the heap on a single unsubscribe click;
- * cancelling the stream discards it and still lets undici reuse the connection.
+ * stream hundreds of megabytes into the heap on a single unsubscribe click.
+ * Cancelling closes the connection rather than returning it to the pool, which
+ * is the right trade here: we make at most a handful of these per click, and
+ * the alternative is reading bytes we have no use for.
  */
 export async function safeFetch(
   rawUrl: string,
@@ -278,7 +280,8 @@ export async function safeFetch(
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
 
-    // Discard without reading: see the note above.
+    // Discard without reading: see the note above. Safe on a bodiless response,
+    // where `body` is null.
     await response.body?.cancel().catch(() => undefined)
 
     const location = response.headers.get('location')

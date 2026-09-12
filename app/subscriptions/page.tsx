@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
 import { useToast } from '@/components/ui/Toast'
-import { useAuth } from '@/hooks/useAuth'
 import { usePromotionalEmails } from '@/hooks/usePromotionalEmails'
 import { useSenderView } from '@/hooks/useSenderView'
 import { apiFetch } from '@/lib/api-client'
@@ -32,8 +31,7 @@ const OUTCOME_STYLES: Record<UnsubscribeStatus, { icon: typeof CheckCircle2; cla
 }
 
 export default function SubscriptionsPage() {
-  const { isAuthenticated } = useAuth()
-  const { senders, isLoading, error, reload } = usePromotionalEmails(isAuthenticated)
+  const { senders, isLoading, error, reload } = usePromotionalEmails()
   const { toast } = useToast()
 
   const view = useSenderView(senders, { unsubscribableOnly: true })
@@ -184,7 +182,7 @@ export default function SubscriptionsPage() {
           {isLoading && senders.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
-              Reading the promotional mail in your inbox…
+              Reading your promotional mail…
             </p>
           ) : view.visible.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
@@ -292,13 +290,20 @@ export default function SubscriptionsPage() {
                         >
                           Unsubscribe
                         </Button>
-                        <Link
-                          href={`${ROUTES.CLEANUP}?sender=${encodeURIComponent(sender.email)}`}
-                          className="flex items-center gap-1 rounded text-xs text-gray-600 hover:text-gray-900 hover:underline"
-                        >
-                          <Trash2 className="h-3 w-3" aria-hidden="true" />
-                          Clean up
-                        </Link>
+                        {/* Cleanup only acts on inbox mail, so a sender whose
+                            backlog is already archived has nothing to clean and
+                            the link would land on an empty filter. */}
+                        {sender.inboxCount > 0 ? (
+                          <Link
+                            href={`${ROUTES.CLEANUP}?sender=${encodeURIComponent(sender.email)}`}
+                            className="flex items-center gap-1 rounded text-xs text-gray-600 hover:text-gray-900 hover:underline"
+                          >
+                            <Trash2 className="h-3 w-3" aria-hidden="true" />
+                            Clean up {formatCount(sender.inboxCount)}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-400">Inbox clear</span>
+                        )}
                       </div>
                     </li>
                   )

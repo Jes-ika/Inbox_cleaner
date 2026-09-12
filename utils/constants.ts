@@ -26,15 +26,21 @@ export const PROTECTED_ROUTES = [
 export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
 /**
- * Scoped to the inbox on purpose.
+ * Discovery is deliberately NOT scoped to the inbox.
  *
- * Without `in:inbox` the scan also returns promotional mail archived long ago.
- * Archiving those is a no-op, so the reported count would overstate what
- * changed — and undoing that "archive" would add INBOX to hundreds of messages
- * that were never in the inbox, dumping old mail into it. Inbox scoping makes
- * the counts truthful and makes undo a genuine inverse.
+ * Scoping the one shared query to `in:inbox` made archive counts truthful, but
+ * it also meant a sender was only unsubscribable while their mail sat in the
+ * inbox — so anyone with a skip-inbox filter, or who had just tidied up, saw no
+ * senders at all while still subscribed to every one of them. Worse, using
+ * Cleanup emptied the Subscriptions list of exactly the senders the user had
+ * just decided they did not want.
+ *
+ * So: discover across the whole Promotions category, and track inbox membership
+ * per message instead (see `inboxMessageIds`). Cleanup acts only on the inbox
+ * ones, which keeps its counts truthful and undo a genuine inverse, while
+ * Subscriptions can still list a sender whose mail is already archived.
  */
-export const GMAIL_QUERY = 'in:inbox category:promotions'
+export const GMAIL_QUERY = 'category:promotions'
 
 /** Upper bound on a single scan, to keep one dashboard load inside Gmail's per-user quota. */
 export const DEFAULT_SCAN_LIMIT = 500

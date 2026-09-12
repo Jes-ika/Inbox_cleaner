@@ -52,3 +52,8 @@ export function formatBytes(bytes: number): string {
 export function formatCount(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
 }
+
+/** `3 messages` / `1 message` — a count and its noun, agreeing. */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${formatCount(count)} ${count === 1 ? singular : plural}`
+}

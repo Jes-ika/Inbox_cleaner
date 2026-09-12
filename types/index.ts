@@ -7,10 +7,22 @@ export interface EmailSender {
   emailCount: number
   /** ISO 8601 — dates cross the API boundary as strings. */
   lastReceived: string
-  /** Message ids belonging to this sender, newest first. */
+  /** Every message id from this sender, newest first. */
   messageIds: string[]
   /** Total size of this sender's messages in bytes, as reported by Gmail. */
   sizeBytes: number
+
+  /**
+   * The subset still carrying the INBOX label — what Cleanup may act on.
+   *
+   * Archiving a message that is already archived changes nothing, so reporting
+   * it would overstate the result, and undoing it would drop long-archived mail
+   * back into the inbox.
+   */
+  inboxMessageIds: string[]
+  inboxCount: number
+  inboxSizeBytes: number
+
   unsubscribe: UnsubscribeTarget | null
 }
 
@@ -23,6 +35,9 @@ export interface PromotionalSummary {
   totalEmails: number
   totalSenders: number
   totalSizeBytes: number
+  /** The subset still in the inbox — what Cleanup can actually clear. */
+  inboxEmails: number
+  inboxSizeBytes: number
   /** True when the mailbox holds more messages than this scan covered. */
   truncated: boolean
 }

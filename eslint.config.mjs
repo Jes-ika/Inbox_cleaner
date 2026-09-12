@@ -9,7 +9,17 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 
 const config = [
   {
-    ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts', 'coverage/**'],
+    ignores: [
+      '.next/**',
+      'node_modules/**',
+      'next-env.d.ts',
+      'coverage/**',
+      // Throwaway probes and review scratch: not project source, and a stray
+      // unused import in one should never fail the project's lint.
+      '.review-tmp/**',
+      '**/*.review.*',
+      '**/__probe*',
+    ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {

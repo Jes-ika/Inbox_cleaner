@@ -98,16 +98,27 @@ Open <http://localhost:3000> and choose **Connect Gmail**.
 
 ### Scanning
 
-`GET /api/emails/promotional` walks the promotional mail in the Gmail inbox
-(`in:inbox category:promotions`), requesting only the `From`,
-`List-Unsubscribe` and `List-Unsubscribe-Post` headers, then groups messages by
-sender.
+`GET /api/emails/promotional` walks the Gmail Promotions category
+(`category:promotions`), requesting only the `From`, `List-Unsubscribe` and
+`List-Unsubscribe-Post` headers, then groups messages by sender.
 
-The `in:inbox` half matters. Without it the scan also returns promotional mail
-archived long ago; archiving those is a no-op, so the reported count would
-overstate what changed — and undoing that "archive" would add the `INBOX` label
-to hundreds of messages that were never in the inbox, dumping old mail back into
-it. Scoping to the inbox makes the counts truthful and makes undo a real inverse.
+**Discovery and action have different scopes, on purpose.** The scan records
+whether each message still carries the `INBOX` label, and each sender therefore
+carries both `messageIds` (everything) and `inboxMessageIds` (the subset Cleanup
+may act on).
+
+That split exists because neither scope works alone:
+
+- Archiving mail that is already archived changes nothing. Counting it would
+  overstate the result, and undoing that "archive" would add `INBOX` to hundreds
+  of messages that were never in the inbox — dumping old mail back into it. So
+  **Cleanup uses the inbox subset**, which keeps its counts truthful and makes
+  undo a real inverse.
+- But scoping *discovery* to the inbox hides any sender whose mail is already
+  archived. A user with a skip-inbox filter would see no senders at all while
+  still subscribed to every one of them, and using Cleanup would empty the
+  Subscriptions list of exactly the senders they had just rejected. So
+  **Subscriptions uses the full list**.
 
 Two limits keep a scan inside Gmail's per-user quota (roughly 250 units/second,
 and `messages.get` costs 5): requests run through a concurrency cap with
@@ -138,6 +149,11 @@ user's behalf would need a scope this app does not request.
 Archive uses `messages.batchModify` to drop the `INBOX` label. Trash uses
 `messages.trash`, pooled under the same concurrency cap. Both are reversed by
 `POST /api/emails/undo`, offered as an Undo action on the confirmation toast.
+
+Trash is applied per message, so a single stale id cannot fail the batch: the
+route reports `{trashedCount, failed, messageIds}` where `messageIds` is only
+what actually moved, and Undo targets exactly that list. It returns 502 only
+when nothing moved at all.
 
 Nothing is ever permanently deleted. Gmail keeps trashed mail for 30 days.
 
@@ -205,6 +221,10 @@ Several tests encode specific bugs that were fixed, so they stay fixed:
 - A 403 is only retried when its reason is a rate limit, and the retry predicate
   must read the shapes gaxios really throws (`status`, `response.data.error.errors`)
   rather than a hand-made `{code: 429}`.
+- A sender whose mail is entirely archived still appears, so they stay
+  unsubscribable, but contributes nothing to `inboxMessageIds`.
+- `requireAccessToken` refreshes an expired token inline and returns
+  `reauth_required` — not a 502 — when the refresh token itself is dead.
 - `assertSafeUrl('https://[::ffff:127.0.0.1]/')` must be blocked. This one is
   asserted through the URL boundary on purpose: the WHATWG parser rewrites that
   host to `::ffff:7f00:1`, so a unit test on the dotted-quad spelling passes

@@ -28,15 +28,15 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li>
-            Message metadata from the promotional mail in your inbox — the <code>From</code>,{' '}
+            Message metadata from your Promotions category — the <code>From</code>,{' '}
             <code>List-Unsubscribe</code> and <code>List-Unsubscribe-Post</code> headers, plus each
-            message&apos;s date, size estimate and identifier.
+            message&apos;s date, size estimate, identifier, and whether it is still in your inbox.
           </li>
           <li>Your email address and display name, from your Google profile.</li>
         </ul>
         <p>
-          We do not read message bodies, attachments, or any mail outside the promotional mail
-          currently in your inbox.
+          We do not read message bodies, attachments, or any mail outside your Promotions category.
+          The same scope is used when looking up a sender&apos;s unsubscribe link.
         </p>
       </section>
 
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             Remove the inbox label, or move messages to trash, when you ask for that explicitly and
-            confirm it.
+            confirm it. Cleanup only ever touches mail still in your inbox.
           </li>
           <li>
             Send an unsubscribe request to the endpoint a sender publishes in its own{' '}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import { apiFetch } from '@/lib/api-client'
 import type { EmailSender, PromotionalSummary } from '@/types'
 
@@ -13,18 +14,24 @@ interface State {
 /**
  * Load the promotional-mail scan and expose the pieces every screen needs.
  * Dashboard, Subscriptions and Cleanup all read the same shape.
+ *
+ * The hook reads the session itself rather than taking an `enabled` flag. A flag
+ * derived from `isAuthenticated` is false during NextAuth's loading phase — a
+ * real round trip to /api/auth/session — so the screens would report "not
+ * loading, nothing found" before the scan had even been allowed to start. Owning
+ * both states here means a call site cannot get that wrong.
  */
-export function usePromotionalEmails(enabled: boolean) {
-  // Starts true when enabled: a scan can run for seconds, and a false loading
-  // flag during it makes every screen render its "nothing found" empty state.
+export function usePromotionalEmails() {
+  const { isAuthenticated, isLoading: sessionLoading } = useAuth()
+
   const [state, setState] = useState<State>({
     summary: null,
-    isLoading: enabled,
+    isLoading: true,
     error: null,
   })
 
   // Bumped on every new request so a slow earlier response cannot overwrite a
-  // newer one, and so an unmount or a strict-mode double-invoke is ignored.
+  // newer one, and so a strict-mode double-invoke is ignored.
   const requestId = useRef(0)
 
   const load = useCallback(async () => {
@@ -50,7 +57,11 @@ export function usePromotionalEmails(enabled: boolean) {
   }, [])
 
   useEffect(() => {
-    if (!enabled) {
+    // Still waiting on the session: hold the loading state rather than
+    // concluding there is no mail.
+    if (sessionLoading) return
+
+    if (!isAuthenticated) {
       // Invalidate anything in flight so its response cannot repopulate the
       // list after sign-out.
       requestId.current++
@@ -61,7 +72,7 @@ export function usePromotionalEmails(enabled: boolean) {
     void load()
     // No cleanup needed: load() discards its own result when requestId has
     // moved on, and React 18 ignores a setState on an unmounted component.
-  }, [enabled, load])
+  }, [isAuthenticated, sessionLoading, load])
 
   /** Drop messages we just acted on, without paying for a full re-scan. */
   const removeMessages = useCallback((messageIds: string[]) => {
@@ -102,7 +113,8 @@ export function usePromotionalEmails(enabled: boolean) {
   return {
     summary: state.summary,
     senders: state.summary?.senders ?? [],
-    isLoading: state.isLoading,
+    /** True while the session is resolving or a scan is in flight. */
+    isLoading: sessionLoading || state.isLoading,
     error: state.error,
     reload: load,
     removeMessages,

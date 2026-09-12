@@ -54,7 +54,15 @@ export function useAuth() {
   // six months. Ask for consent once; if that does not take, surface a button
   // instead of redirecting again.
   useEffect(() => {
-    if (session?.error !== 'RefreshAccessTokenError') return
+    if (session?.error !== 'RefreshAccessTokenError') {
+      // The session recovered — a poll refreshed the token, or the user signed
+      // in again. Clearing this matters: Header renders the Reconnect button
+      // *instead of* the whole signed-in branch, so a stuck flag would strip
+      // Logout and, below the md breakpoint where the desktop nav is hidden,
+      // every means of navigating anywhere.
+      setReconnectRequired(false)
+      return
+    }
 
     if (readAttempted()) {
       setReconnectRequired(true)

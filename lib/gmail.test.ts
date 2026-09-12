@@ -145,11 +145,13 @@ function message(
   receivedAt: number,
   extras: Record<string, string> = {},
   sizeBytes = 1000,
+  inInbox = true,
 ): ParsedMessage {
   return {
     id,
     receivedAt,
     sizeBytes,
+    inInbox,
     headers: [
       { name: 'From', value: from },
       ...Object.entries(extras).map(([name, value]) => ({ name, value })),
@@ -234,6 +236,51 @@ describe('groupMessagesBySender', () => {
   it('renders a missing internalDate as an epoch date rather than throwing', () => {
     const [sender] = groupMessagesBySender([message('a', FROM, 0)])
     expect(sender.lastReceived).toBe(new Date(0).toISOString())
+  })
+
+  // Cleanup acts on inboxMessageIds, never messageIds. Archiving already
+  // archived mail changes nothing, so counting it would overstate the result —
+  // and undoing that "archive" would drop long-archived mail into the inbox.
+  describe('inbox subset', () => {
+    it('separates inbox mail from mail that is only in the category', () => {
+      const [sender] = groupMessagesBySender([
+        message('in-1', FROM, 300, {}, 1000, true),
+        message('archived', FROM, 200, {}, 4000, false),
+        message('in-2', FROM, 100, {}, 500, true),
+      ])
+
+      expect(sender.emailCount).toBe(3)
+      expect(sender.messageIds).toEqual(['in-1', 'archived', 'in-2'])
+      expect(sender.sizeBytes).toBe(5500)
+
+      expect(sender.inboxCount).toBe(2)
+      expect(sender.inboxMessageIds).toEqual(['in-1', 'in-2'])
+      expect(sender.inboxSizeBytes).toBe(1500)
+    })
+
+    it('keeps a sender whose mail is entirely archived, so they stay unsubscribable', () => {
+      // Scoping discovery to the inbox hid these senders completely, leaving
+      // the user still subscribed with no way to act.
+      const [sender] = groupMessagesBySender([
+        message('old', FROM, 100, { 'List-Unsubscribe': '<https://medium.com/u>' }, 1000, false),
+      ])
+
+      expect(sender.emailCount).toBe(1)
+      expect(sender.unsubscribe).toMatchObject({ kind: 'http' })
+      expect(sender.inboxCount).toBe(0)
+      expect(sender.inboxMessageIds).toEqual([])
+      expect(sender.inboxSizeBytes).toBe(0)
+    })
+
+    it('orders inbox ids newest first, like the full list', () => {
+      const [sender] = groupMessagesBySender([
+        message('old', FROM, 100, {}, 100, true),
+        message('new', FROM, 300, {}, 100, true),
+        message('skip', FROM, 200, {}, 100, false),
+      ])
+
+      expect(sender.inboxMessageIds).toEqual(['new', 'old'])
+    })
   })
 })
 
