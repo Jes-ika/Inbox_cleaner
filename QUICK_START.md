@@ -118,6 +118,11 @@ puts your newsletters elsewhere, change `GMAIL_QUERY` in `utils/constants.ts`.
 **`npm run dev` shows old env values**
 Restart it. Env changes are not hot-reloaded.
 
+**`npm start` logs `Cannot find module './vendor-chunks/….js'`**
+Stale build output — `.next` predates a dependency change. `npm run clean && npm run build`.
+This bites after any `npm install` that moves a package, and `next dev` hides it
+because it rebuilds from scratch.
+
 ## Deploying
 
 Set `NEXTAUTH_URL` to the deployed origin, register that origin's callback with
