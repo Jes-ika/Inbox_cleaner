@@ -13,12 +13,22 @@ export async function POST(request: NextRequest) {
   if (!ids.ok) return ids.response
 
   try {
-    const trashedCount = await trashMessages(auth.accessToken, ids.messageIds)
-    return NextResponse.json({ trashedCount, messageIds: ids.messageIds })
+    const { succeeded, failed } = await trashMessages(auth.accessToken, ids.messageIds)
+
+    // Nothing moved at all: that is a failure, not a partial success.
+    if (succeeded.length === 0) {
+      return NextResponse.json(
+        { error: 'Gmail rejected every message in that request. Nothing was moved.' },
+        { status: 502 },
+      )
+    }
+
+    // messageIds is what undo should act on, so it lists only what moved.
+    return NextResponse.json({ trashedCount: succeeded.length, failed, messageIds: succeeded })
   } catch (error) {
     console.error('Failed to trash messages:', error)
     return NextResponse.json(
-      { error: 'Gmail rejected the trash request. Some messages may not have moved.' },
+      { error: 'Gmail rejected the trash request. Nothing was moved.' },
       { status: 502 },
     )
   }

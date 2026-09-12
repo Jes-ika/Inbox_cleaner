@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
  *
  * Both directions are genuinely reversible in Gmail: archiving only removes the
  * INBOX label, and trashing is a label move with a 30-day grace period. The
- * client sends back the ids the original call returned.
+ * client sends back the ids the original call reported as changed.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAccessToken(request)
@@ -25,16 +25,28 @@ export async function POST(request: NextRequest) {
   if (!ids.ok) return ids.response
 
   try {
-    const restoredCount =
-      body.kind === 'trash'
-        ? await untrashMessages(auth.accessToken, ids.messageIds)
-        : await unarchiveMessages(auth.accessToken, ids.messageIds)
+    if (body.kind === 'archive') {
+      const restoredCount = await unarchiveMessages(auth.accessToken, ids.messageIds)
+      return NextResponse.json({ restoredCount, failed: 0 })
+    }
 
-    return NextResponse.json({ restoredCount })
+    const { succeeded, failed } = await untrashMessages(auth.accessToken, ids.messageIds)
+
+    if (succeeded.length === 0) {
+      return NextResponse.json(
+        { error: 'Could not restore those messages. They are still in Gmail — check Trash.' },
+        { status: 502 },
+      )
+    }
+
+    return NextResponse.json({ restoredCount: succeeded.length, failed })
   } catch (error) {
     console.error('Failed to undo cleanup:', error)
     return NextResponse.json(
-      { error: 'Could not restore those messages. They are still in Gmail — check Trash or All Mail.' },
+      {
+        error:
+          'Could not restore those messages. They are still in Gmail — check Trash or All Mail.',
+      },
       { status: 502 },
     )
   }

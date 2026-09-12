@@ -42,29 +42,71 @@ const RETRYABLE_REASONS = new Set([
   'backendError',
   'internalError',
 ])
+const RETRYABLE_NETWORK_CODES = new Set([
+  'AbortError',
+  'TimeoutError',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EPIPE',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+])
+
+interface MaybeGaxiosError {
+  code?: number | string
+  status?: number
+  name?: string
+  errors?: Array<{ reason?: string }>
+  response?: { status?: number; data?: { error?: { errors?: Array<{ reason?: string }> } } }
+  cause?: unknown
+}
+
+/** Gaxios spreads this information across several shapes depending on version. */
+function httpStatus(err: MaybeGaxiosError): number | null {
+  for (const candidate of [err.status, err.response?.status, err.code]) {
+    if (typeof candidate === 'number') return candidate
+    if (typeof candidate === 'string' && /^\d{3}$/.test(candidate)) return Number(candidate)
+  }
+  return null
+}
+
+function reasons(err: MaybeGaxiosError): string[] {
+  const direct = err.errors ?? err.response?.data?.error?.errors
+  const nested = (err.cause as MaybeGaxiosError | undefined)?.errors
+  return [...(direct ?? []), ...(nested ?? [])]
+    .map((e) => e.reason)
+    .filter((r): r is string => typeof r === 'string')
+}
 
 /**
  * Gmail reports throttling as 429, and sometimes as 403 with a rate-limit
  * reason. A 403 for any other reason is a permissions problem that will never
  * succeed on retry, so it is checked specifically rather than by status alone.
+ *
+ * The shapes matter here: a real GaxiosError carries a *string* `code` like
+ * 'ERR_BAD_REQUEST' with the HTTP status on `status`/`response.status`, and puts
+ * the rate-limit reason under `response.data.error.errors`. Reading only
+ * `err.code` and `err.errors` made both the 403 and the timeout branch dead.
  */
 export function isRetryableError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
 
-  const err = error as {
-    code?: number | string
-    status?: number
-    errors?: Array<{ reason?: string }>
-    name?: string
-  }
+  const err = error as MaybeGaxiosError
 
-  if (err.name === 'AbortError' || err.name === 'TimeoutError') return true
+  const networkCode = String(err.code ?? err.name ?? '')
+  if (RETRYABLE_NETWORK_CODES.has(networkCode)) return true
 
-  const status = typeof err.code === 'number' ? err.code : err.status
-  if (typeof status !== 'number' || !RETRYABLE_STATUS.has(status)) return false
+  const cause = err.cause as MaybeGaxiosError | undefined
+  if (cause && RETRYABLE_NETWORK_CODES.has(String(cause.code ?? cause.name ?? ''))) return true
+
+  const status = httpStatus(err)
+  if (status === null || !RETRYABLE_STATUS.has(status)) return false
 
   if (status === 403) {
-    return (err.errors ?? []).some((e) => e.reason && RETRYABLE_REASONS.has(e.reason))
+    return reasons(err).some((reason) => RETRYABLE_REASONS.has(reason))
   }
 
   return true

@@ -77,9 +77,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
 
+      {/*
+        role="log" rather than role="status": status implies aria-atomic="true",
+        which makes assistive tech re-read every visible toast each time one is
+        added or dismissed. A log announces only what changed.
+      */}
       <div
-        role="status"
+        role="log"
         aria-live="polite"
+        aria-atomic="false"
         aria-relevant="additions"
         className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex flex-col items-stretch gap-2 sm:inset-x-auto sm:right-6 sm:w-96"
       >

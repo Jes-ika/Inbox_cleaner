@@ -98,9 +98,16 @@ Open <http://localhost:3000> and choose **Connect Gmail**.
 
 ### Scanning
 
-`GET /api/emails/promotional` walks the Gmail Promotions category, requesting
-only the `From`, `List-Unsubscribe` and `List-Unsubscribe-Post` headers, then
-groups messages by sender.
+`GET /api/emails/promotional` walks the promotional mail in the Gmail inbox
+(`in:inbox category:promotions`), requesting only the `From`,
+`List-Unsubscribe` and `List-Unsubscribe-Post` headers, then groups messages by
+sender.
+
+The `in:inbox` half matters. Without it the scan also returns promotional mail
+archived long ago; archiving those is a no-op, so the reported count would
+overstate what changed — and undoing that "archive" would add the `INBOX` label
+to hundreds of messages that were never in the inbox, dumping old mail back into
+it. Scoping to the inbox makes the counts truthful and makes undo a real inverse.
 
 Two limits keep a scan inside Gmail's per-user quota (roughly 250 units/second,
 and `messages.get` costs 5): requests run through a concurrency cap with
@@ -190,10 +197,18 @@ sender grouping, the SSRF guard, the retry predicate, and formatting:
 npm test
 ```
 
-66 tests. Several encode specific bugs that were fixed, so they stay fixed: a
-sender's "last received" date must be the newest message rather than whichever
-was processed last; an unsubscribe link must be picked up from any of a sender's
-messages; a 403 is only retried when its reason is a rate limit.
+Several tests encode specific bugs that were fixed, so they stay fixed:
+
+- A sender's "last received" date must be the newest message, not whichever was
+  processed last.
+- An unsubscribe link must be picked up from any of a sender's messages.
+- A 403 is only retried when its reason is a rate limit, and the retry predicate
+  must read the shapes gaxios really throws (`status`, `response.data.error.errors`)
+  rather than a hand-made `{code: 429}`.
+- `assertSafeUrl('https://[::ffff:127.0.0.1]/')` must be blocked. This one is
+  asserted through the URL boundary on purpose: the WHATWG parser rewrites that
+  host to `::ffff:7f00:1`, so a unit test on the dotted-quad spelling passes
+  while the guard is fully bypassable.
 
 ## Going to production
 

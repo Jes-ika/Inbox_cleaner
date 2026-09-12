@@ -82,6 +82,18 @@ export async function POST(request: NextRequest) {
       : await safeFetch(target.url, { method: 'GET' })
 
     if (response.ok) {
+      // A 301/302/303 turns our POST into a GET, so the one-click body never
+      // arrived. Reporting that as "accepted" would be a guess, not a result.
+      if (target.oneClick && !response.methodPreserved) {
+        const result: UnsubscribeResult = {
+          status: 'manual',
+          message:
+            'The sender redirected the one-click request, so we cannot confirm it went through. Finish it in the browser.',
+          actionUrl: target.url,
+        }
+        return NextResponse.json(result)
+      }
+
       const result: UnsubscribeResult = {
         status: 'unsubscribed',
         message: target.oneClick

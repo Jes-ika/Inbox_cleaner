@@ -184,7 +184,7 @@ export default function SubscriptionsPage() {
           {isLoading && senders.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
-              Reading your promotions category…
+              Reading the promotional mail in your inbox…
             </p>
           ) : view.visible.length === 0 ? (
             <p className="py-10 text-center text-gray-600">

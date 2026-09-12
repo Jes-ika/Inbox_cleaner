@@ -42,9 +42,14 @@ function CleanupContent() {
   const allVisibleSelected =
     visibleEmails.length > 0 && visibleEmails.every((email) => selected.includes(email))
 
+  // Derive everything from senders still present, not from the raw `selected`
+  // list: after a cleanup an email can linger in `selected` with no messages
+  // left behind it, which would make the confirmation and the toast overstate.
   const selectedSenders = senders.filter((sender) => selected.includes(sender.email))
   const selectedMessageIds = selectedSenders.flatMap((sender) => sender.messageIds)
   const selectedCount = selectedMessageIds.length
+  const selectedSenderCount = selectedSenders.length
+  const canAct = selectedCount > 0 && !isProcessing
 
   const toggle = (email: string) =>
     setSelected((prev) =>
@@ -77,33 +82,44 @@ function CleanupContent() {
 
     const kind = action
     const messageIds = [...selectedMessageIds]
-    const senderEmails = [...selected]
+    // Only senders that still have mail behind them, so the count cannot overstate.
+    const senderEmails = selectedSenders.map((sender) => sender.email)
 
     setIsProcessing(true)
     try {
-      await apiFetch<Record<string, unknown>>(
+      const result = await apiFetch<{ messageIds?: string[]; failed?: number }>(
         kind === 'trash' ? '/api/emails/trash' : '/api/emails/archive',
         { method: 'POST', body: JSON.stringify({ messageIds }) },
       )
 
+      // Trust the server's list over our own: a partial trash reports only the
+      // ids that actually moved, and undo must target exactly those.
+      const changed = result.messageIds ?? messageIds
+      const failed = result.failed ?? 0
+
       recordCleanup({
         kind,
-        messageIds,
+        messageIds: changed,
         senderEmails,
         timestamp: new Date().toISOString(),
       })
 
       // Drop them from the view rather than paying for a full rescan.
-      removeMessages(messageIds)
+      removeMessages(changed)
       setSelected([])
       setAction(null)
 
       toast({
         title: kind === 'trash' ? 'Moved to trash' : 'Archived',
-        description: `${formatCount(messageIds.length)} messages from ${formatCount(senderEmails.length)} sender${senderEmails.length === 1 ? '' : 's'}.`,
-        variant: 'success',
+        description: [
+          `${formatCount(changed.length)} messages from ${formatCount(senderEmails.length)} sender${senderEmails.length === 1 ? '' : 's'}.`,
+          failed > 0 ? `${formatCount(failed)} could not be moved.` : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        variant: failed > 0 ? 'info' : 'success',
         durationMs: UNDO_WINDOW_MS,
-        action: { label: 'Undo', onClick: () => undo(kind, messageIds) },
+        action: { label: 'Undo', onClick: () => undo(kind, changed) },
       })
     } catch (cleanupError) {
       toast({
@@ -154,7 +170,7 @@ function CleanupContent() {
               </h2>
               {selected.length > 0 ? (
                 <span className="text-sm text-gray-600">
-                  {selected.length} selected · {formatCount(selectedCount)} emails
+                  {selectedSenderCount} selected · {formatCount(selectedCount)} emails
                 </span>
               ) : null}
             </div>
@@ -173,7 +189,7 @@ function CleanupContent() {
           {isLoading && senders.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
-              Reading your promotions category…
+              Reading the promotional mail in your inbox…
             </p>
           ) : view.visible.length === 0 ? (
             <p className="py-10 text-center text-gray-600">
@@ -238,14 +254,14 @@ function CleanupContent() {
 
           {selected.length > 0 ? (
             <div className="mt-6 flex flex-wrap gap-3 border-t border-gray-200 pt-6">
-              <Button onClick={() => setAction('trash')} disabled={isProcessing}>
+              <Button onClick={() => setAction('trash')} disabled={!canAct}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
                 Trash {formatCount(selectedCount)} emails
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => setAction('archive')}
-                disabled={isProcessing}
+                disabled={!canAct}
               >
                 <Archive className="h-4 w-4" aria-hidden="true" />
                 Archive {formatCount(selectedCount)} emails
@@ -271,6 +287,7 @@ function CleanupContent() {
               variant={action === 'trash' ? 'danger' : 'primary'}
               onClick={() => void runCleanup()}
               isLoading={isProcessing}
+              disabled={selectedCount === 0}
             >
               {action === 'trash' ? 'Trash' : 'Archive'} {formatCount(selectedCount)}
             </Button>
@@ -279,8 +296,8 @@ function CleanupContent() {
       >
         <div className="space-y-3">
           <p className="text-gray-700">
-            {formatCount(selectedCount)} emails from {formatCount(selected.length)} sender
-            {selected.length === 1 ? '' : 's'}.
+            {formatCount(selectedCount)} emails from {formatCount(selectedSenderCount)} sender
+            {selectedSenderCount === 1 ? '' : 's'}.
           </p>
           <p className="text-sm text-gray-600">
             {action === 'trash'

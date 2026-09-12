@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '@/lib/api-client'
 import type { EmailSender, PromotionalSummary } from '@/types'
 
@@ -11,56 +11,59 @@ interface State {
 }
 
 /**
- * Load the promotional-mail scan once per mount and expose the pieces every
- * screen needs. Dashboard, Subscriptions and Cleanup all read the same shape.
+ * Load the promotional-mail scan and expose the pieces every screen needs.
+ * Dashboard, Subscriptions and Cleanup all read the same shape.
  */
 export function usePromotionalEmails(enabled: boolean) {
-  const [state, setState] = useState<State>({ summary: null, isLoading: enabled, error: null })
+  // Starts true when enabled: a scan can run for seconds, and a false loading
+  // flag during it makes every screen render its "nothing found" empty state.
+  const [state, setState] = useState<State>({
+    summary: null,
+    isLoading: enabled,
+    error: null,
+  })
+
+  // Bumped on every new request so a slow earlier response cannot overwrite a
+  // newer one, and so an unmount or a strict-mode double-invoke is ignored.
+  const requestId = useRef(0)
 
   const load = useCallback(async () => {
+    const id = ++requestId.current
     setState((prev) => ({ ...prev, isLoading: true, error: null }))
+
     try {
       const summary = await apiFetch<PromotionalSummary>('/api/emails/promotional')
-      setState({ summary, isLoading: false, error: null })
+      if (id === requestId.current) {
+        setState({ summary, isLoading: false, error: null })
+      }
     } catch (error) {
-      setState({
-        summary: null,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Could not load your mail.',
-      })
+      if (id === requestId.current) {
+        // Keep whatever was already on screen. Blanking the list while showing
+        // an error banner tells the user two contradictory things.
+        setState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: error instanceof Error ? error.message : 'Could not load your mail.',
+        }))
+      }
     }
   }, [])
 
   useEffect(() => {
     if (!enabled) {
+      // Invalidate anything in flight so its response cannot repopulate the
+      // list after sign-out.
+      requestId.current++
       setState({ summary: null, isLoading: false, error: null })
       return
     }
 
-    let active = true
-    // React 18 strict mode mounts effects twice in development; the flag keeps
-    // the second pass from writing state from a stale request.
-    void (async () => {
-      try {
-        const summary = await apiFetch<PromotionalSummary>('/api/emails/promotional')
-        if (active) setState({ summary, isLoading: false, error: null })
-      } catch (error) {
-        if (active) {
-          setState({
-            summary: null,
-            isLoading: false,
-            error: error instanceof Error ? error.message : 'Could not load your mail.',
-          })
-        }
-      }
-    })()
+    void load()
+    // No cleanup needed: load() discards its own result when requestId has
+    // moved on, and React 18 ignores a setState on an unmounted component.
+  }, [enabled, load])
 
-    return () => {
-      active = false
-    }
-  }, [enabled])
-
-  /** Drop senders whose mail we just acted on, without a full re-scan. */
+  /** Drop messages we just acted on, without paying for a full re-scan. */
   const removeMessages = useCallback((messageIds: string[]) => {
     const removed = new Set(messageIds)
 

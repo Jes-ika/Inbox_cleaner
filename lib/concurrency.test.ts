@@ -53,12 +53,42 @@ describe('isRetryableError', () => {
     expect(isRetryableError({ name: 'TimeoutError' })).toBe(true)
   })
 
+  // These are the shapes googleapis/gaxios actually throws. Asserting only on
+  // bare {code: number} objects left the real branches untested and dead.
+  it('reads the status off a realistic GaxiosError', () => {
+    expect(isRetryableError({ code: 'ERR_BAD_REQUEST', status: 429 })).toBe(true)
+    expect(isRetryableError({ code: 'ERR_BAD_RESPONSE', response: { status: 503 } })).toBe(true)
+    expect(isRetryableError({ code: '429' })).toBe(true)
+    expect(isRetryableError({ code: 'ERR_BAD_REQUEST', status: 404 })).toBe(false)
+  })
+
+  it('retries network-level failures by their errno code', () => {
+    expect(isRetryableError({ code: 'ECONNRESET' })).toBe(true)
+    expect(isRetryableError({ code: 'ETIMEDOUT' })).toBe(true)
+    expect(isRetryableError({ code: 'EAI_AGAIN' })).toBe(true)
+    expect(isRetryableError({ name: 'TypeError', cause: { code: 'UND_ERR_SOCKET' } })).toBe(true)
+  })
+
   it('retries a 403 only when the reason is a rate limit', () => {
     expect(isRetryableError({ code: 403, errors: [{ reason: 'userRateLimitExceeded' }] })).toBe(true)
+    // The nested shape a real Gmail 403 arrives in.
+    expect(
+      isRetryableError({
+        code: 'ERR_BAD_REQUEST',
+        status: 403,
+        response: { status: 403, data: { error: { errors: [{ reason: 'rateLimitExceeded' }] } } },
+      }),
+    ).toBe(true)
     // A genuine permissions failure will never succeed on retry.
     expect(isRetryableError({ code: 403, errors: [{ reason: 'insufficientPermissions' }] })).toBe(
       false,
     )
+    expect(
+      isRetryableError({
+        status: 403,
+        response: { status: 403, data: { error: { errors: [{ reason: 'forbidden' }] } } },
+      }),
+    ).toBe(false)
     expect(isRetryableError({ code: 403 })).toBe(false)
   })
 

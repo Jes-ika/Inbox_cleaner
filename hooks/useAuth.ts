@@ -1,16 +1,47 @@
 'use client'
 
 import { useSession, signIn, signOut } from 'next-auth/react'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ROUTES } from '@/utils/constants'
+
+/**
+ * Marks that this browser tab has already been bounced to Google over a dead
+ * refresh token. sessionStorage rather than a module variable on purpose: the
+ * redirect is a full page load, which resets module state — so a module flag
+ * would let a declined consent bounce the user forever.
+ */
+const RECONSENT_KEY = 'inboxclean_reconsent_attempted'
+
+function readAttempted(): boolean {
+  try {
+    return window.sessionStorage.getItem(RECONSENT_KEY) === '1'
+  } catch {
+    // Storage blocked: assume we already tried, and show the manual button.
+    return true
+  }
+}
+
+function markAttempted(): void {
+  try {
+    window.sessionStorage.setItem(RECONSENT_KEY, '1')
+  } catch {
+    // Nothing to do; the flag is only a loop guard.
+  }
+}
 
 export function useAuth() {
   const { data: session, status } = useSession()
+  const [reconnectRequired, setReconnectRequired] = useState(false)
 
   const isAuthenticated = status === 'authenticated'
   const isLoading = status === 'loading'
 
   const login = useCallback(async () => {
+    try {
+      window.sessionStorage.removeItem(RECONSENT_KEY)
+    } catch {
+      // Ignore; an explicit click is already the user retrying.
+    }
     await signIn('google', { callbackUrl: ROUTES.DASHBOARD })
   }, [])
 
@@ -18,18 +49,28 @@ export function useAuth() {
     await signOut({ callbackUrl: ROUTES.HOME })
   }, [])
 
-  // The refresh token stopped working (revoked in the Google account, or expired
-  // after six months of disuse). Nothing the app can do but ask for consent again.
+  // The stored refresh token stopped working — revoked in the Google account,
+  // expired after a week while the OAuth app is still in Testing, or unused for
+  // six months. Ask for consent once; if that does not take, surface a button
+  // instead of redirecting again.
   useEffect(() => {
-    if (session?.error === 'RefreshAccessTokenError') {
-      void signIn('google', { callbackUrl: ROUTES.DASHBOARD })
+    if (session?.error !== 'RefreshAccessTokenError') return
+
+    if (readAttempted()) {
+      setReconnectRequired(true)
+      return
     }
+
+    markAttempted()
+    void signIn('google', { callbackUrl: ROUTES.DASHBOARD })
   }, [session?.error])
 
   return {
     session,
     isAuthenticated,
     isLoading,
+    /** True when automatic re-consent already failed and the user must act. */
+    reconnectRequired,
     login,
     logout,
     user: session?.user,

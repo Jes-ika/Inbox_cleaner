@@ -28,14 +28,15 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li>
-            Message metadata from your Promotions category — the <code>From</code>,{' '}
+            Message metadata from the promotional mail in your inbox — the <code>From</code>,{' '}
             <code>List-Unsubscribe</code> and <code>List-Unsubscribe-Post</code> headers, plus each
             message&apos;s date, size estimate and identifier.
           </li>
           <li>Your email address and display name, from your Google profile.</li>
         </ul>
         <p>
-          We do not read message bodies, attachments, or any mail outside the Promotions category.
+          We do not read message bodies, attachments, or any mail outside the promotional mail
+          currently in your inbox.
         </p>
       </section>
 

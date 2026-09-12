@@ -47,9 +47,12 @@ export function MobileNav({ email, onLogout }: MobileNavProps) {
                 href={href}
                 aria-current={pathname === href ? 'page' : undefined}
                 className={cn(
-                  'flex cursor-pointer items-center gap-3 rounded px-3 py-2 text-sm font-medium outline-none',
+                  // Radix suppresses the native focus ring, so every item needs
+                  // its own highlighted style — including the active one, which
+                  // otherwise shows no focus at all under keyboard navigation.
+                  'flex cursor-pointer items-center gap-3 rounded px-3 py-2 text-sm font-medium outline-none data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-blue-500',
                   pathname === href
-                    ? 'bg-blue-50 text-blue-700'
+                    ? 'bg-blue-50 text-blue-700 data-[highlighted]:bg-blue-100'
                     : 'text-gray-700 data-[highlighted]:bg-gray-100',
                 )}
               >

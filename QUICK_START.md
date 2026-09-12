@@ -112,7 +112,7 @@ if it loops, remove the app from
 [your Google permissions](https://myaccount.google.com/permissions) and connect again.
 
 **No emails found**
-The scan reads the Promotions category only (`category:promotions`). If Gmail
+The scan reads inbox promotional mail only (`in:inbox category:promotions`). If Gmail
 puts your newsletters elsewhere, change `GMAIL_QUERY` in `utils/constants.ts`.
 
 **`npm run dev` shows old env values**

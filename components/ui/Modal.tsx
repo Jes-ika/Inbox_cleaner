@@ -25,6 +25,10 @@ export function Modal({ isOpen, onClose, title, description, children, footer }:
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-gray-900/50" />
         <Dialog.Content
+          // With no description there is nothing to reference. Radix wants the
+          // prop passed explicitly as undefined rather than a filler element —
+          // an sr-only copy of the title just gets the title announced twice.
+          aria-describedby={description ? undefined : undefined}
           className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white shadow-xl focus:outline-none"
         >
           <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
@@ -34,16 +38,13 @@ export function Modal({ isOpen, onClose, title, description, children, footer }:
                 <Dialog.Description className="mt-1 text-sm text-gray-600">
                   {description}
                 </Dialog.Description>
-              ) : (
-                // Radix warns when a dialog has no description unless told so.
-                <Dialog.Description className="sr-only">{title}</Dialog.Description>
-              )}
+              ) : null}
             </div>
             <Dialog.Close
               className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="Close dialog"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>
           </div>
 

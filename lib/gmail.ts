@@ -317,29 +317,53 @@ export function unarchiveMessages(accessToken: string, messageIds: string[]): Pr
   return modifyLabels(accessToken, messageIds, { addLabelIds: ['INBOX'] })
 }
 
-/** Gmail has no batch trash endpoint, so these go one at a time under a concurrency cap. */
+export interface PerMessageResult {
+  /** Ids that actually changed — what an undo should be offered for. */
+  succeeded: string[]
+  failed: number
+}
+
+/**
+ * Gmail has no batch trash endpoint, so these go one at a time under a
+ * concurrency cap.
+ *
+ * Per-message failures are collected rather than thrown. One stale id in a
+ * selection of 200 should not make the whole request report failure while the
+ * other 199 are trashed anyway — and the caller needs to know which ids moved
+ * so undo targets exactly those.
+ */
 async function trashEach(
   accessToken: string,
   messageIds: string[],
   operation: 'trash' | 'untrash',
-): Promise<number> {
+): Promise<PerMessageResult> {
   const ids = assertActionable(messageIds)
-  if (ids.length === 0) return 0
+  if (ids.length === 0) return { succeeded: [], failed: 0 }
 
   const gmail = getGmailClient(accessToken)
 
-  await mapWithConcurrency(ids, MUTATION_CONCURRENCY, (id) =>
-    withRetry(() => gmail.users.messages[operation]({ userId: 'me', id })),
-  )
+  const outcomes = await mapWithConcurrency(ids, MUTATION_CONCURRENCY, async (id) => {
+    try {
+      await withRetry(() => gmail.users.messages[operation]({ userId: 'me', id }))
+      return id
+    } catch (error) {
+      console.error(`Failed to ${operation} message ${id}:`, error)
+      return null
+    }
+  })
 
-  return ids.length
+  const succeeded = outcomes.filter((id): id is string => id !== null)
+  return { succeeded, failed: ids.length - succeeded.length }
 }
 
-export function trashMessages(accessToken: string, messageIds: string[]): Promise<number> {
+export function trashMessages(accessToken: string, messageIds: string[]): Promise<PerMessageResult> {
   return trashEach(accessToken, messageIds, 'trash')
 }
 
-export function untrashMessages(accessToken: string, messageIds: string[]): Promise<number> {
+export function untrashMessages(
+  accessToken: string,
+  messageIds: string[],
+): Promise<PerMessageResult> {
   return trashEach(accessToken, messageIds, 'untrash')
 }
 

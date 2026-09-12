@@ -18,7 +18,7 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      label: 'Promotional emails',
+      label: 'Promotional in inbox',
       value: summary ? `${formatCount(summary.totalEmails)}${summary.truncated ? '+' : ''}` : '—',
       icon: Mail,
       tone: 'text-blue-600',
@@ -61,7 +61,7 @@ export default function DashboardPage() {
 
       {summary?.truncated ? (
         <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Your promotions category holds more mail than one scan covers. These figures describe the{' '}
+          Your inbox holds more promotional mail than one scan covers. These figures describe the{' '}
           {formatCount(summary.totalEmails)} most recent messages.
         </p>
       ) : null}
@@ -113,7 +113,7 @@ export default function DashboardPage() {
           {isLoading && senders.length === 0 ? (
             <p className="py-6 text-center text-gray-600">
               <Spinner className="mr-2 inline h-4 w-4" />
-              Reading your promotions category…
+              Reading the promotional mail in your inbox…
             </p>
           ) : senders.length === 0 ? (
             <p className="py-6 text-center text-gray-600">

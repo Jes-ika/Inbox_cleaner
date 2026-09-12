@@ -16,18 +16,24 @@ interface GoogleRefreshResponse {
   error_description?: string
 }
 
-/**
- * Exchange the stored refresh token for a fresh access token.
- *
- * Google access tokens last about an hour. On failure we keep the rest of the
- * token but stamp it with an error so the client can force a re-consent rather
- * than silently issuing 401s for the rest of the session.
- */
-async function refreshAccessToken(token: JWT): Promise<JWT> {
-  if (!token.refreshToken) {
-    return { ...token, accessToken: undefined, error: 'RefreshAccessTokenError' }
-  }
+export interface RefreshedTokens {
+  accessToken: string
+  /** Unix seconds. */
+  expiresAt: number
+  refreshToken: string
+}
 
+/**
+ * Exchange a refresh token for a fresh access token, or null when the refresh
+ * token itself is no longer good.
+ *
+ * Exported because route handlers need it too: getToken() only decrypts the
+ * cookie, it does not run the jwt callback, so a route can be handed an access
+ * token that expired while the tab sat open.
+ */
+export async function refreshGoogleAccessToken(
+  refreshToken: string,
+): Promise<RefreshedTokens | null> {
   try {
     const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
       method: 'POST',
@@ -36,7 +42,7 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
         client_id: process.env.GOOGLE_CLIENT_ID || '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
         grant_type: 'refresh_token',
-        refresh_token: token.refreshToken,
+        refresh_token: refreshToken,
       }),
     })
 
@@ -47,16 +53,39 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
     }
 
     return {
-      ...token,
       accessToken: refreshed.access_token,
       expiresAt: Math.floor(Date.now() / 1000) + (refreshed.expires_in ?? 3600),
       // Google only returns a new refresh token when the old one is rotated out.
-      refreshToken: refreshed.refresh_token ?? token.refreshToken,
-      error: undefined,
+      refreshToken: refreshed.refresh_token ?? refreshToken,
     }
   } catch (error) {
     console.error('Failed to refresh Google access token:', error)
+    return null
+  }
+}
+
+/**
+ * Google access tokens last about an hour. On failure we keep the rest of the
+ * token but stamp it with an error so the client can ask for consent again
+ * rather than silently issuing 401s for the rest of the session.
+ */
+async function refreshAccessToken(token: JWT): Promise<JWT> {
+  if (!token.refreshToken) {
     return { ...token, accessToken: undefined, error: 'RefreshAccessTokenError' }
+  }
+
+  const refreshed = await refreshGoogleAccessToken(token.refreshToken)
+
+  if (!refreshed) {
+    return { ...token, accessToken: undefined, error: 'RefreshAccessTokenError' }
+  }
+
+  return {
+    ...token,
+    accessToken: refreshed.accessToken,
+    expiresAt: refreshed.expiresAt,
+    refreshToken: refreshed.refreshToken,
+    error: undefined,
   }
 }
 

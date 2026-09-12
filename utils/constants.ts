@@ -25,7 +25,16 @@ export const PROTECTED_ROUTES = [
  */
 export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
-export const GMAIL_QUERY = 'category:promotions'
+/**
+ * Scoped to the inbox on purpose.
+ *
+ * Without `in:inbox` the scan also returns promotional mail archived long ago.
+ * Archiving those is a no-op, so the reported count would overstate what
+ * changed — and undoing that "archive" would add INBOX to hundreds of messages
+ * that were never in the inbox, dumping old mail into it. Inbox scoping makes
+ * the counts truthful and makes undo a genuine inverse.
+ */
+export const GMAIL_QUERY = 'in:inbox category:promotions'
 
 /** Upper bound on a single scan, to keep one dashboard load inside Gmail's per-user quota. */
 export const DEFAULT_SCAN_LIMIT = 500

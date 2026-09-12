@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn'
 import { APP_NAME, ROUTES } from '@/utils/constants'
 
 export function Header() {
-  const { isAuthenticated, isLoading, login, logout, user } = useAuth()
+  const { isAuthenticated, isLoading, login, logout, user, reconnectRequired } = useAuth()
   const pathname = usePathname()
 
   return (
@@ -44,6 +44,12 @@ export function Header() {
           <div className="flex flex-none items-center gap-2">
             {isLoading ? (
               <div className="h-9 w-24 animate-pulse rounded bg-gray-200 motion-reduce:animate-none" />
+            ) : reconnectRequired ? (
+              // Automatic re-consent already failed once this tab. Offer a
+              // button rather than bouncing to Google on every page load.
+              <Button size="sm" onClick={login}>
+                Reconnect Gmail
+              </Button>
             ) : isAuthenticated ? (
               <>
                 <span className="hidden max-w-[16rem] truncate text-sm text-gray-600 lg:inline">
