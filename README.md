@@ -197,6 +197,7 @@ lib/
   concurrency.ts   Pooling, chunking, retry
   api-auth.ts      Token lookup and input validation for routes
   api-client.ts    Browser-side fetch wrapper
+  summary.ts       Applies a completed cleanup to a scan summary
   format.ts        Relative time, byte sizes
   history.ts       localStorage activity log
 middleware.ts      Edge protection for the app routes
@@ -225,6 +226,10 @@ Several tests encode specific bugs that were fixed, so they stay fixed:
   unsubscribable, but contributes nothing to `inboxMessageIds`.
 - `requireAccessToken` refreshes an expired token inline and returns
   `reauth_required` — not a 502 — when the refresh token itself is dead.
+- Archiving shrinks only a sender's inbox subset and never removes the sender,
+  while trashing removes the mail outright — `applyCleanupToSummary` is where
+  that asymmetry lives, and getting it wrong would either hide a sender you can
+  still unsubscribe from or re-send ids that were already actioned.
 - `assertSafeUrl('https://[::ffff:127.0.0.1]/')` must be blocked. This one is
   asserted through the URL boundary on purpose: the WHATWG parser rewrites that
   host to `::ffff:7f00:1`, so a unit test on the dotted-quad spelling passes

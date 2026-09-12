@@ -23,7 +23,7 @@ const MODAL_SENDER_PREVIEW = 8
 
 function CleanupContent() {
   const searchParams = useSearchParams()
-  const { senders, isLoading, error, reload, removeMessages } = usePromotionalEmails()
+  const { senders, isLoading, error, reload, applyCleanup } = usePromotionalEmails()
   const { toast } = useToast()
 
   // Cleanup can only act on mail still in the inbox: archiving an already
@@ -142,8 +142,9 @@ function CleanupContent() {
         timestamp: new Date().toISOString(),
       })
 
-      // Drop them from the view rather than paying for a full rescan.
-      removeMessages(changed)
+      // Reflect it locally rather than paying for a full rescan. Archiving only
+      // shrinks the inbox subset; trashing removes the mail outright.
+      applyCleanup(kind, changed)
       setSelected([])
       setAction(null)
 

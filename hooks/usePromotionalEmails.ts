@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { apiFetch } from '@/lib/api-client'
-import type { EmailSender, PromotionalSummary } from '@/types'
+import { applyCleanupToSummary } from '@/lib/summary'
+import type { CleanupActionKind, PromotionalSummary } from '@/types'
 
 interface State {
   summary: PromotionalSummary | null
@@ -74,40 +75,17 @@ export function usePromotionalEmails() {
     // moved on, and React 18 ignores a setState on an unmounted component.
   }, [isAuthenticated, sessionLoading, load])
 
-  /** Drop messages we just acted on, without paying for a full re-scan. */
-  const removeMessages = useCallback((messageIds: string[]) => {
-    const removed = new Set(messageIds)
-
-    setState((prev) => {
-      if (!prev.summary) return prev
-
-      const senders: EmailSender[] = []
-      let totalEmails = 0
-      let totalSizeBytes = 0
-
-      for (const sender of prev.summary.senders) {
-        const keptIds = sender.messageIds.filter((id) => !removed.has(id))
-        if (keptIds.length === 0) continue
-
-        const ratio = keptIds.length / sender.messageIds.length
-        const sizeBytes = Math.round(sender.sizeBytes * ratio)
-
-        senders.push({ ...sender, messageIds: keptIds, emailCount: keptIds.length, sizeBytes })
-        totalEmails += keptIds.length
-        totalSizeBytes += sizeBytes
-      }
-
-      return {
-        ...prev,
-        summary: {
-          ...prev.summary,
-          senders,
-          totalEmails,
-          totalSenders: senders.length,
-          totalSizeBytes,
-        },
-      }
-    })
+  /**
+   * Reflect a completed cleanup locally, instead of paying for a full re-scan.
+   * The archive/trash asymmetry lives in applyCleanupToSummary, where it is
+   * pure and tested.
+   */
+  const applyCleanup = useCallback((kind: CleanupActionKind, messageIds: string[]) => {
+    setState((prev) =>
+      prev.summary
+        ? { ...prev, summary: applyCleanupToSummary(prev.summary, kind, messageIds) }
+        : prev,
+    )
   }, [])
 
   return {
@@ -117,6 +95,6 @@ export function usePromotionalEmails() {
     isLoading: sessionLoading || state.isLoading,
     error: state.error,
     reload: load,
-    removeMessages,
+    applyCleanup,
   }
 }
