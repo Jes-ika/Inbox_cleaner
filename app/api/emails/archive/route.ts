@@ -1,36 +1,25 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { archiveEmails } from '@/lib/gmail'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { parseMessageIds, readJsonBody, requireAccessToken } from '@/lib/api-auth'
+import { archiveMessages } from '@/lib/gmail'
 
-export async function POST(request: Request) {
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAccessToken(request)
+  if (!auth.ok) return auth.response
+
+  const body = await readJsonBody(request)
+  const ids = parseMessageIds(body.messageIds)
+  if (!ids.ok) return ids.response
+
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { messageIds } = await request.json()
-
-    if (!messageIds || !Array.isArray(messageIds)) {
-      return NextResponse.json(
-        { error: 'Invalid messageIds' },
-        { status: 400 }
-      )
-    }
-
-    await archiveEmails(session, messageIds)
-
-    return NextResponse.json({
-      success: true,
-      archivedCount: messageIds.length,
-    })
+    const archivedCount = await archiveMessages(auth.accessToken, ids.messageIds)
+    return NextResponse.json({ archivedCount, messageIds: ids.messageIds })
   } catch (error) {
-    console.error('Error archiving emails:', error)
+    console.error('Failed to archive messages:', error)
     return NextResponse.json(
-      { error: 'Failed to archive emails' },
-      { status: 500 }
+      { error: 'Gmail rejected the archive request. Nothing was changed.' },
+      { status: 502 },
     )
   }
 }

@@ -1,30 +1,25 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { fetchPromotionalEmails, groupEmailsBySender } from '@/lib/gmail'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { requireAccessToken } from '@/lib/api-auth'
+import { scanPromotionalEmails } from '@/lib/gmail'
+import { DEFAULT_SCAN_LIMIT } from '@/utils/constants'
 
-export async function GET() {
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: NextRequest) {
+  const auth = await requireAccessToken(request)
+  if (!auth.ok) return auth.response
+
+  const requested = Number.parseInt(request.nextUrl.searchParams.get('limit') ?? '', 10)
+  const limit = Number.isFinite(requested) ? requested : DEFAULT_SCAN_LIMIT
+
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const messages = await fetchPromotionalEmails(session)
-    const senders = groupEmailsBySender(messages)
-
-    return NextResponse.json({
-      messages,
-      senders: Array.from(senders.values()),
-      totalEmails: messages.length,
-      totalSenders: senders.size,
-    })
+    const summary = await scanPromotionalEmails(auth.accessToken, limit)
+    return NextResponse.json(summary)
   } catch (error) {
-    console.error('Error fetching promotional emails:', error)
+    console.error('Failed to scan promotional emails:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch promotional emails' },
-      { status: 500 }
+      { error: 'Could not read your promotional mail. Try again in a moment.' },
+      { status: 502 },
     )
   }
 }

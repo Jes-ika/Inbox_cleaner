@@ -1,23 +1,22 @@
 import type { Metadata } from 'next'
-import { APP_NAME, APP_DESCRIPTION } from '@/utils/constants'
 import { AuthSessionProvider } from '@/components/providers/SessionProvider'
+import { ToastProvider } from '@/components/ui/Toast'
+import { APP_DESCRIPTION, APP_NAME } from '@/utils/constants'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: APP_NAME,
+  title: { default: APP_NAME, template: `%s · ${APP_NAME}` },
   description: APP_DESCRIPTION,
+  robots: { index: true, follow: true },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
+      {/* Browser extensions inject attributes here before React hydrates. */}
       <body suppressHydrationWarning>
         <AuthSessionProvider>
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </AuthSessionProvider>
       </body>
     </html>

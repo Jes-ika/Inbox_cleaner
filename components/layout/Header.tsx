@@ -1,58 +1,65 @@
 'use client'
 
+import { LogOut, Mail } from 'lucide-react'
 import Link from 'next/link'
-import { useAuth } from '@/hooks/useAuth'
-import { APP_NAME, ROUTES } from '@/utils/constants'
+import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
-import { Mail, LogOut } from 'lucide-react'
+import { MobileNav } from '@/components/layout/MobileNav'
+import { NAV_LINKS } from '@/components/layout/nav-links'
+import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/cn'
+import { APP_NAME, ROUTES } from '@/utils/constants'
 
 export function Header() {
   const { isAuthenticated, isLoading, login, logout, user } = useAuth()
+  const pathname = usePathname()
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link href={ROUTES.HOME} className="flex items-center gap-2">
-            <Mail className="w-6 h-6 text-blue-600" />
+    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Link href={ROUTES.HOME} className="flex flex-none items-center gap-2">
+            <Mail className="h-6 w-6 text-blue-600" aria-hidden="true" />
             <span className="text-xl font-bold text-gray-900">{APP_NAME}</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
-            {isAuthenticated && (
-              <>
-                <Link href={ROUTES.DASHBOARD} className="text-gray-700 hover:text-gray-900 font-medium">
-                  Dashboard
+          {isAuthenticated && (
+            <nav aria-label="Main" className="hidden md:flex md:items-center md:gap-8">
+              {NAV_LINKS.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={pathname === href ? 'page' : undefined}
+                  className={cn(
+                    'font-medium transition-colors',
+                    pathname === href ? 'text-blue-600' : 'text-gray-700 hover:text-gray-900',
+                  )}
+                >
+                  {label}
                 </Link>
-                <Link href={ROUTES.SUBSCRIPTIONS} className="text-gray-700 hover:text-gray-900 font-medium">
-                  Subscriptions
-                </Link>
-                <Link href={ROUTES.CLEANUP} className="text-gray-700 hover:text-gray-900 font-medium">
-                  Cleanup
-                </Link>
-                <Link href={ROUTES.SETTINGS} className="text-gray-700 hover:text-gray-900 font-medium">
-                  Settings
-                </Link>
-              </>
-            )}
-          </nav>
+              ))}
+            </nav>
+          )}
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-none items-center gap-2">
             {isLoading ? (
-              <div className="w-20 h-10 bg-gray-200 rounded animate-pulse" />
+              <div className="h-9 w-24 animate-pulse rounded bg-gray-200 motion-reduce:animate-none" />
             ) : isAuthenticated ? (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">{user?.email}</span>
+              <>
+                <span className="hidden max-w-[16rem] truncate text-sm text-gray-600 lg:inline">
+                  {user?.email}
+                </span>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={logout}
-                  className="flex items-center gap-2"
+                  className="hidden md:inline-flex"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                   Logout
                 </Button>
-              </div>
+                <MobileNav email={user?.email} onLogout={logout} />
+              </>
             ) : (
               <Button size="sm" onClick={login}>
                 Connect Gmail

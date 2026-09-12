@@ -1,36 +1,25 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { trashEmails } from '@/lib/gmail'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { parseMessageIds, readJsonBody, requireAccessToken } from '@/lib/api-auth'
+import { trashMessages } from '@/lib/gmail'
 
-export async function POST(request: Request) {
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAccessToken(request)
+  if (!auth.ok) return auth.response
+
+  const body = await readJsonBody(request)
+  const ids = parseMessageIds(body.messageIds)
+  if (!ids.ok) return ids.response
+
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { messageIds } = await request.json()
-
-    if (!messageIds || !Array.isArray(messageIds)) {
-      return NextResponse.json(
-        { error: 'Invalid messageIds' },
-        { status: 400 }
-      )
-    }
-
-    await trashEmails(session, messageIds)
-
-    return NextResponse.json({
-      success: true,
-      trashedCount: messageIds.length,
-    })
+    const trashedCount = await trashMessages(auth.accessToken, ids.messageIds)
+    return NextResponse.json({ trashedCount, messageIds: ids.messageIds })
   } catch (error) {
-    console.error('Error trashing emails:', error)
+    console.error('Failed to trash messages:', error)
     return NextResponse.json(
-      { error: 'Failed to trash emails' },
-      { status: 500 }
+      { error: 'Gmail rejected the trash request. Some messages may not have moved.' },
+      { status: 502 },
     )
   }
 }

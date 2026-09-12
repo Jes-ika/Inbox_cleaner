@@ -1,40 +1,59 @@
 'use client'
 
-import React, { useEffect } from 'react'
-import { cn } from '@/lib/cn'
+import * as Dialog from '@radix-ui/react-dialog'
+import { X } from 'lucide-react'
+import React from 'react'
 
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
   title: string
+  /** Read out with the title by screen readers; keep it to one sentence. */
+  description?: string
   children: React.ReactNode
   footer?: React.ReactNode
 }
 
-export function Modal({ isOpen, onClose, title, children, footer }: ModalProps) {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
-    }
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [isOpen])
-
-  if (!isOpen) return null
-
+/**
+ * Built on Radix Dialog rather than a bare fixed div: that brings the focus
+ * trap, Escape handling, scroll locking, `role="dialog"`, `aria-modal` and the
+ * title/description wiring, none of which the previous hand-rolled version had.
+ */
+export function Modal({ isOpen, onClose, title, description, children, footer }: ModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-        </div>
-        <div className="px-6 py-4">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-gray-200 flex gap-3 justify-end">{footer}</div>}
-      </div>
-    </div>
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-gray-900/50" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white shadow-xl focus:outline-none"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+            <div>
+              <Dialog.Title className="text-lg font-semibold text-gray-900">{title}</Dialog.Title>
+              {description ? (
+                <Dialog.Description className="mt-1 text-sm text-gray-600">
+                  {description}
+                </Dialog.Description>
+              ) : (
+                // Radix warns when a dialog has no description unless told so.
+                <Dialog.Description className="sr-only">{title}</Dialog.Description>
+              )}
+            </div>
+            <Dialog.Close
+              className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </Dialog.Close>
+          </div>
+
+          <div className="px-6 py-4">{children}</div>
+
+          {footer ? (
+            <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">{footer}</div>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
