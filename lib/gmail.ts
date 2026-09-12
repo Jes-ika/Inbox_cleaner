@@ -49,7 +49,7 @@ export interface ParsedMessage {
  * The client only ever carries an access token. Refreshing is NextAuth's job
  * (see lib/auth.ts), so there is no client secret here and nothing to leak.
  */
-export function getGmailClient(accessToken: string): gmail_v1.Gmail {
+function getGmailClient(accessToken: string): gmail_v1.Gmail {
   const auth = new google.auth.OAuth2()
   auth.setCredentials({ access_token: accessToken })
   return google.gmail({ version: 'v1', auth })
@@ -462,6 +462,11 @@ export async function findUnsubscribeTarget(
   // the first target found made the lookup disagree with the badge the UI had
   // already shown: a sender advertised as one-click would unsubscribe by
   // whatever its newest message happened to carry — often a mailto.
+  //
+  // The windows still differ: the scan ranks across everything it saw, this
+  // reads the newest UNSUBSCRIBE_LOOKUP_MESSAGES. A sender who publishes
+  // one-click only on much older mail can therefore resolve to a lesser target
+  // here — which the route reports honestly rather than claiming success.
   let best: UnsubscribeTarget | null = null
 
   for (const ref of list.data.messages ?? []) {

@@ -11,14 +11,6 @@ export const ROUTES = {
   TERMS: '/terms',
 } as const
 
-/** Routes that require a session. Kept in sync with middleware.ts. */
-export const PROTECTED_ROUTES = [
-  ROUTES.DASHBOARD,
-  ROUTES.SUBSCRIPTIONS,
-  ROUTES.CLEANUP,
-  ROUTES.SETTINGS,
-]
-
 /**
  * gmail.modify covers reading as well as labelling and trashing, so asking for
  * gmail.readonly alongside it adds review surface without adding access.

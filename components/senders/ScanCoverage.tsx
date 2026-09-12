@@ -18,17 +18,20 @@ interface ScanCoverageProps {
 export function ScanCoverage({ summary, scope }: ScanCoverageProps) {
   if (!summary?.truncated) return null
 
+  // Both halves of the comparison have to be the same thing. Measuring an inbox
+  // estimate against the total scanned would suppress the useful number
+  // whenever the inbox is the smaller of the two — which is the normal case.
   const scanned = scope === 'inbox' ? summary.inboxEmails : summary.totalEmails
   const estimate = scope === 'inbox' ? summary.inboxEstimate : summary.totalEstimate
+  const where = scope === 'inbox' ? 'in your inbox' : 'in your Promotions category'
 
   return (
     <p className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-      This scan covered the {formatCount(summary.totalEmails)} most recent promotional
-      messages
-      {scope === 'inbox' ? `, ${formatCount(scanned)} of them still in your inbox` : ''}.
-      {estimate > summary.totalEmails
-        ? ` You have roughly ${formatCount(estimate)} in total, so there is more beyond this window.`
-        : ' There is more mail beyond this window.'}
+      This scan read the {formatCount(summary.totalEmails)} most recent promotional messages
+      {scope === 'inbox' ? `, of which ${formatCount(scanned)} are still in your inbox` : ''}.{' '}
+      {estimate > scanned
+        ? `You have roughly ${formatCount(estimate)} ${where}, so there is more beyond this window.`
+        : 'There is more mail beyond this window.'}
     </p>
   )
 }

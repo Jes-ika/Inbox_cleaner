@@ -123,9 +123,15 @@ That split exists because neither scope works alone:
 Two limits keep a scan inside Gmail's per-user quota (roughly 250 units/second,
 and `messages.get` costs 5): requests run through a concurrency cap with
 exponential backoff on 429 and 5xx, and the scan stops at
-`DEFAULT_SCAN_LIMIT` (500) messages. When there is more mail than that, the
-response sets `truncated` and the UI says so rather than presenting a partial
-count as the total.
+`DEFAULT_SCAN_LIMIT` (500) messages. `?limit=` overrides it up to
+`MAX_SCAN_LIMIT` (2000).
+
+When there is more mail than the window, `truncated` is set and every screen
+renders the `ScanCoverage` notice rather than presenting a partial count as the
+total. Because the window is shared with archived mail, the response also
+carries `totalEstimate` and `inboxEstimate` — Gmail's own `resultSizeEstimate`
+from two one-unit list calls — so the notice can say how much lies beyond it
+instead of only that something does.
 
 ### Unsubscribing
 
