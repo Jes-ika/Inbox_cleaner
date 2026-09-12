@@ -25,10 +25,13 @@ export function Modal({ isOpen, onClose, title, description, children, footer }:
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-gray-900/50" />
         <Dialog.Content
-          // With no description there is nothing to reference. Radix wants the
-          // prop passed explicitly as undefined rather than a filler element —
-          // an sr-only copy of the title just gets the title announced twice.
-          aria-describedby={description ? undefined : undefined}
+          // Radix sets aria-describedby from its own Description, then spreads
+          // our props over it. So: when there is no description, pass the key
+          // explicitly as undefined to clear the dangling reference and silence
+          // the dev warning; when there is one, pass nothing and let Radix's id
+          // stand. A filler sr-only Description would instead get the title
+          // announced twice.
+          {...(description ? {} : { 'aria-describedby': undefined })}
           className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg bg-white shadow-xl focus:outline-none"
         >
           <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
