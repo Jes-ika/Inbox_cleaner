@@ -1,60 +1,129 @@
 # InboxClean
 
-A Gmail inbox cleanup and newsletter-management tool. Group promotional mail by
-sender, unsubscribe through the endpoints senders publish, and clear the backlog
-with archive or trash — both reversible.
+**Bulk-unsubscribe from newsletters and clear promotional mail out of Gmail — with every action reversible.**
 
-## Status
+[![CI](https://github.com/Jes-ika/Inbox_cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/Jes-ika/Inbox_cleaner/actions/workflows/ci.yml)
+![Next.js 15](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Tests 112](https://img.shields.io/badge/tests-112-success)
+![License MIT](https://img.shields.io/badge/license-MIT-blue)
 
-Feature-complete for local use. `npm run verify` (typecheck + lint + tests) and
-`npm run build` both pass.
+![The InboxClean landing page](docs/screenshots/landing.png)
 
-The one thing that is **not** done, because it cannot be done from a repository:
-you need your own Google OAuth credentials. See [Setup](#setup).
+Gmail's Promotions tab accumulates hundreds of newsletters you no longer read.
+Unsubscribing from each one by hand is slow, and mass-deleting them is
+irreversible. InboxClean groups the backlog by sender, so you can see who is
+worth acting on, then treats *stopping future mail* and *clearing the existing
+backlog* as two separate decisions — because they are.
 
-Before this can serve users other than yourself, it also needs to pass Google's
-OAuth verification — see [Going to production](#going-to-production).
+---
 
-## Tech stack
+## Contents
 
-| Concern | Choice |
+- [What it does](#what-it-does)
+- [Engineering highlights](#engineering-highlights)
+- [Quick start](#quick-start)
+- [Commands](#commands)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Tests](#tests)
+- [Going to production](#going-to-production)
+
+## What it does
+
+| Screen | Purpose |
 | --- | --- |
-| Framework | Next.js 15 (App Router), React 18, TypeScript (strict) |
-| Styling | Tailwind CSS, `class-variance-authority` for component variants |
-| Components | Radix UI primitives (dialog, dropdown menu), `lucide-react` icons |
-| Auth | NextAuth v4, Google provider, JWT sessions |
-| Mail | Gmail API via `googleapis` |
-| Tests | Vitest |
-| Persistence | None server-side. Session in an encrypted cookie; an activity log in `localStorage` |
+| **Dashboard** | How much promotional mail you have, how many senders, how much space it takes |
+| **Subscriptions** | Every promotional sender, with a one-click unsubscribe where they publish one |
+| **Cleanup** | Select senders, then archive or trash their mail in bulk — with Undo |
+| **Settings** | Connected account, granted scope, local activity log, disconnect |
 
-## Setup
+Two ideas shape the whole design:
 
-### 1. Install
+1. **Unsubscribing and cleaning up are separate.** Stopping future mail says
+   nothing about whether you want the last two years of it gone, so the app
+   never conflates them.
+2. **Nothing is destroyed.** Archive only removes the inbox label; trash is
+   Gmail's 30-day bin. Both are reversible from the confirmation toast, and the
+   app never issues a permanent delete.
+
+## Engineering highlights
+
+The parts worth reading if you are evaluating the code:
+
+**SSRF-hardened outbound requests** — [`lib/safe-fetch.ts`](lib/safe-fetch.ts)
+
+`List-Unsubscribe` URLs are written by whoever sent you the mail, so fetching
+one lets a stranger choose a destination for a request leaving your server. The
+unsubscribe endpoint therefore accepts a *sender address*, never a URL, and
+resolves the target from that sender's own headers. Every URL is checked for
+scheme, embedded credentials and resolved address — and every redirect hop is
+re-checked.
+
+The address check decodes IPv6 to its 16 bytes rather than pattern-matching the
+text, because the WHATWG URL parser re-serialises `[::ffff:127.0.0.1]` to
+`::ffff:7f00:1`. A dotted-quad regex misses that entirely while the host still
+reaches loopback. IPv4-mapped, IPv4-compatible, NAT64 and 6to4 wrappers are all
+resolved to the address they actually carry.
+
+**RFC 8058 one-click unsubscribe** — [`lib/gmail.ts`](lib/gmail.ts)
+
+When a sender advertises `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+the request must be a POST with that exact body; a GET is what image
+pre-fetchers send, and senders routinely ignore it. A `301`/`302`/`303` on the
+way downgrades the POST to a GET, so the result is reported as *needs your
+action* rather than claimed as success.
+
+**OAuth token lifecycle** — [`lib/auth.ts`](lib/auth.ts), [`lib/api-auth.ts`](lib/api-auth.ts)
+
+Access and refresh tokens live in an encrypted HTTP-only cookie and are never
+copied onto the session object, so `/api/auth/session` cannot hand them to page
+scripts. The JWT callback refreshes ahead of expiry; route handlers check expiry
+themselves too, because `getToken()` only decrypts the cookie — it never runs
+the callback — so a tab left open past the hour would otherwise hand Gmail a
+dead token.
+
+**Quota-aware Gmail access** — [`lib/concurrency.ts`](lib/concurrency.ts)
+
+Gmail allows roughly 250 quota units per second per user and `messages.get`
+costs 5, so scans run through a concurrency pool with exponential backoff and
+full jitter. The retry predicate distinguishes a 403 that means *rate limited*
+from a 403 that means *forbidden*, reading the shapes `gaxios` actually throws.
+
+**Truthful reporting** — [`lib/summary.ts`](lib/summary.ts)
+
+Counts shown to the user are the counts that will change. Archiving already
+archived mail does nothing, so Cleanup acts only on the inbox subset while
+Subscriptions still lists every sender; a partial trash reports what actually
+moved, and Undo targets exactly that. When a scan cannot cover the whole
+mailbox, the UI says so instead of presenting a partial figure as the total.
+
+## Quick start
+
+You need Node 18+ and your own Google OAuth credentials — the app talks to your
+real mailbox, so there is no shared demo key.
 
 ```bash
+git clone https://github.com/Jes-ika/Inbox_cleaner.git
+cd Inbox_cleaner
 npm install
+cp .env.example .env.local   # then fill it in, see below
+npm run dev
 ```
 
-### 2. Create Google OAuth credentials
+### Google credentials
 
-1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
-2. Enable the **Gmail API** for it.
-3. Configure the OAuth consent screen. Add the scope
-   `https://www.googleapis.com/auth/gmail.modify` and add your own Google
-   account under **Test users** — a restricted scope is limited to listed test
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create a project.
+2. Enable the **Gmail API**.
+3. Configure the OAuth consent screen: add the scope
+   `https://www.googleapis.com/auth/gmail.modify`, and add your own Google
+   account under **Test users**. A restricted scope only works for listed test
    users until the app is verified.
-4. Create credentials → **OAuth client ID** → **Web application**.
-5. Add the authorized redirect URI exactly:
+4. **Credentials → OAuth client ID → Web application.**
+5. Authorized redirect URI, exactly:
    `http://localhost:3000/api/auth/callback/google`
-6. Copy the client ID and client secret.
 
-### 3. Configure the environment
-
-Copy the template and fill in the two Google values:
-
-```bash
-cp .env.example .env.local
-```
+Then fill in `.env.local`:
 
 ```env
 GOOGLE_CLIENT_ID=…apps.googleusercontent.com
@@ -69,15 +138,8 @@ Generate the session secret with:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-Note the variable name: **`GOOGLE_CLIENT_ID`**, not `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
-The client ID is only ever read on the server and has no business in the browser
-bundle.
-
-### 4. Run
-
-```bash
-npm run dev
-```
+Note the name: **`GOOGLE_CLIENT_ID`**, not `NEXT_PUBLIC_GOOGLE_CLIENT_ID`. It is
+only ever read on the server and has no business in the browser bundle.
 
 Open <http://localhost:3000> and choose **Connect Gmail**.
 
@@ -88,11 +150,24 @@ Open <http://localhost:3000> and choose **Connect Gmail**.
 | `npm run dev` | Development server on :3000 |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
-| `npm run lint` | ESLint (flat config, non-interactive) |
+| `npm run lint` | ESLint (flat config, runs non-interactively) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest, once |
 | `npm run test:watch` | Vitest, watching |
 | `npm run verify` | typecheck + lint + test |
+| `npm run clean` | Remove `.next` (fixes stale-build errors after an install) |
+
+## Tech stack
+
+| Concern | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router), React 18, TypeScript (strict) |
+| Styling | Tailwind CSS, `class-variance-authority` for component variants |
+| Components | Radix UI primitives (dialog, dropdown menu), `lucide-react` icons |
+| Auth | NextAuth v4, Google provider, JWT sessions |
+| Mail | Gmail API via `googleapis` |
+| Tests | Vitest |
+| Persistence | None server-side. Session in an encrypted cookie; an activity log in `localStorage` |
 
 ## How it works
 
@@ -143,7 +218,7 @@ This matters: `List-Unsubscribe` values are written by whoever sent the mail. An
 endpoint that fetched a URL from the request body would let any caller point the
 server at `169.254.169.254` or anything else it can reach. Every URL is checked
 for scheme, credentials and resolved address before a request goes out, and each
-redirect hop is re-checked — see `lib/safe-fetch.ts`.
+redirect hop is re-checked — see [`lib/safe-fetch.ts`](lib/safe-fetch.ts).
 
 When the sender advertises RFC 8058 one-click (`List-Unsubscribe-Post:
 List-Unsubscribe=One-Click`) the request is a POST with that body. A `mailto:`-only
@@ -172,7 +247,21 @@ with `getToken()`.
 
 The JWT callback refreshes the access token about a minute before it expires. If
 the refresh token itself stops working, the session is stamped with
-`RefreshAccessTokenError` and the client starts a fresh consent flow.
+`RefreshAccessTokenError` and the client asks for consent again — once per tab,
+then it surfaces a Reconnect button rather than looping.
+
+## API
+
+| Endpoint | Body | Notes |
+| --- | --- | --- |
+| `GET /api/emails/promotional` | — | `?limit=` up to 2000, defaults to 500 |
+| `POST /api/emails/archive` | `{messageIds}` | Removes the `INBOX` label |
+| `POST /api/emails/trash` | `{messageIds}` | Recoverable for 30 days |
+| `POST /api/emails/undo` | `{kind, messageIds}` | `kind` is `trash` or `archive` |
+| `POST /api/emails/unsubscribe` | `{sender}` | A sender **address**, never a URL |
+
+Every route requires a session. `messageIds` is capped at 1000 per request and
+each id is validated.
 
 ## Project structure
 
@@ -191,7 +280,7 @@ app/
   error.tsx  loading.tsx  not-found.tsx
 components/
   layout/    AppShell, Header, Sidebar, MobileNav, LegalPage
-  senders/   SenderToolbar (search + sort)
+  senders/   SenderToolbar, ScanCoverage
   ui/        Button, Card, Modal, Spinner, Toast
   marketing/ ConnectButton
 hooks/
@@ -213,14 +302,15 @@ Tests sit next to what they cover: `lib/*.test.ts`.
 
 ## Tests
 
-The suite covers the layer where the bugs actually live — header parsing,
-sender grouping, the SSRF guard, the retry predicate, and formatting:
+112 tests over the layer where the bugs actually live — header parsing, sender
+grouping, the SSRF guard, the retry predicate, the auth gate, and the
+cleanup/undo bookkeeping:
 
 ```bash
 npm test
 ```
 
-Several tests encode specific bugs that were fixed, so they stay fixed:
+Several encode specific bugs that were found and fixed, so they stay fixed:
 
 - A sender's "last received" date must be the newest message, not whichever was
   processed last.
@@ -233,9 +323,7 @@ Several tests encode specific bugs that were fixed, so they stay fixed:
 - `requireAccessToken` refreshes an expired token inline and returns
   `reauth_required` — not a 502 — when the refresh token itself is dead.
 - Archiving shrinks only a sender's inbox subset and never removes the sender,
-  while trashing removes the mail outright — `applyCleanupToSummary` is where
-  that asymmetry lives, and getting it wrong would either hide a sender you can
-  still unsubscribe from or re-send ids that were already actioned.
+  while trashing removes the mail outright.
 - `assertSafeUrl('https://[::ffff:127.0.0.1]/')` must be blocked. This one is
   asserted through the URL boundary on purpose: the WHATWG parser rewrites that
   host to `::ffff:7f00:1`, so a unit test on the dotted-quad spelling passes
@@ -262,9 +350,14 @@ early; it is the long pole, not the code.
 `npm audit` reports two remaining issues (one moderate in `next`, one high in the
 `postcss` that Next bundles). Both are only resolved by Next 16, a major upgrade
 that also requires React 19. The `postcss` advisories concern attacker-controlled
-CSS, and this app serves no third-party CSS. Revisit when you take the Next 16
+CSS, and this app serves no third-party CSS. Revisit when taking the Next 16
 upgrade deliberately.
+
+## Further reading
+
+- [`QUICK_START.md`](QUICK_START.md) — the five-minute setup and a troubleshooting table
+- [`docs/history/`](docs/history) — build notes from the project's earlier phases, kept for context
 
 ## License
 
-MIT
+[MIT](LICENSE)
